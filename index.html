@@ -4,6 +4,13 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>شبكة الموسى للإنترنيت — إدارة الزبائن والدفعات</title>
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#10161d" />
+<link rel="icon" href="icon-192.png" />
+<link rel="apple-touch-icon" href="icon-192.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="شبكة الموسى" />
 <script>
 (function(){ try{ if(localStorage.getItem('isp_theme')==='light') document.documentElement.setAttribute('data-theme','light'); }catch(e){} })();
 </script>
@@ -51,6 +58,15 @@ table { width:100%; border-collapse:collapse; font-size:13.5px; }
 th,td { text-align:right; padding:9px 10px; border-bottom:1px solid var(--border); }
 th { color:var(--muted); font-weight:500; font-size:12.5px; }
 tr:last-child td { border-bottom:none; }
+#payments-grid-wrap { max-height:75vh; overflow:auto; }
+#payments-grid-wrap thead th { position:sticky; top:0; background:var(--panel); z-index:3; box-shadow:0 1px 0 var(--border); }
+#payments-grid-wrap td.col-sticky-1, #payments-grid-wrap td.col-sticky-2,
+#payments-grid-wrap th.col-sticky-1, #payments-grid-wrap th.col-sticky-2 {
+  position:sticky; background:var(--panel); z-index:2;
+}
+#payments-grid-wrap th.col-sticky-1, #payments-grid-wrap th.col-sticky-2 { z-index:4; }
+#payments-grid-wrap .col-sticky-1 { right:0; min-width:140px; max-width:140px; box-shadow:-1px 0 0 var(--border); }
+#payments-grid-wrap .col-sticky-2 { right:140px; min-width:120px; max-width:120px; box-shadow:-1px 0 0 var(--border); }
 .pill { display:inline-block; padding:2px 9px; border-radius:999px; font-size:12px; }
 .pill.ok { background:var(--accent-dim); color:var(--accent); }
 .pill.late { background:var(--danger-dim); color:var(--danger); }
@@ -63,7 +79,6 @@ input, select { background:var(--panel-2); border:1px solid var(--border); color
 .form-row { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px; align-items:flex-end; }
 .form-row label { font-size:12.5px; color:var(--muted); display:block; margin-bottom:4px; }
 .empty { color:var(--muted); font-size:13.5px; padding:14px 0; text-align:center; }
-.sync-badge { font-size:12.5px; cursor:pointer; padding:4px 10px; border:1px solid var(--border); border-radius:999px; white-space:nowrap; }
 .save-warn { color:var(--danger); font-size:12.5px; margin-bottom:10px; }
 .section-heading { display:flex; align-items:baseline; justify-content:space-between; margin-bottom:12px; }
 .count-badge { color:var(--muted); font-size:12px; }
@@ -79,6 +94,10 @@ input, select { background:var(--panel-2); border:1px solid var(--border); color
 .sidebar-spacer { flex:1; }
 .sidebar-user-info { color:var(--muted); font-size:12px; padding:8px 12px; }
 .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.55); display:flex; align-items:center; justify-content:center; z-index:1000; padding:16px; }
+.isp-toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--panel-2); border:1px solid var(--border); color:var(--text); padding:10px 18px; border-radius:8px; font-size:13px; z-index:2000; box-shadow:0 4px 14px rgba(0,0,0,0.35); max-width:90vw; text-align:center; }
+.offline-banner { background:var(--warn-dim); color:var(--warn); font-size:12.5px; padding:6px 16px; text-align:center; }
+.install-icon-row { display:flex; align-items:center; gap:12px; margin-bottom:14px; }
+.install-icon-row img { width:48px; height:48px; border-radius:12px; }
 .modal-box { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:20px; width:100%; max-width:360px; }
 .modal-box h3 { margin-bottom:14px; font-size:16px; }
 .modal-actions { display:flex; gap:8px; margin-top:16px; flex-wrap:wrap; }
@@ -214,151 +233,86 @@ ${lines.join("\n")}
 // ======================= API =======================
 async function api(action, payload={}){
   if(state.user){
-    if(payload.actorName===undefined) payload.actorName = state.user.name;
-    if(payload.actorRole===undefined) payload.actorRole = state.user.role;
+    payload.actorName = state.user.name;
+    payload.actorRole = state.user.role;
   }
-  const ctl = new AbortController();
-  const timer = setTimeout(()=>ctl.abort(), 30000);
   try{
     const res = await fetch(APPS_SCRIPT_URL, {
-      method:"POST", signal:ctl.signal,
+      method:"POST",
       headers: {"Content-Type":"text/plain;charset=utf-8"},
       body: JSON.stringify({action, payload})
     });
     return await res.json();
   } catch(e){
-    return { ok:false, network:true, error:"تعذر الاتصال بالخادم. تحقق من الإنترنت وحاول مجددًا." };
-  } finally { clearTimeout(timer); }
+    return { ok:false, networkError:true, error:"تعذر الاتصال بالخادم. تحقق من الإنترنت." };
+  }
 }
 
-// ======================= OFFLINE CACHE + SYNC QUEUE =======================
-// كل تعديل (دفعة / تعديل زبون / تفعيل-تعطيل) يُطبَّق محليًا فورًا بدون إعادة تحميل،
-// ويُحفظ في طابور على الجهاز، ثم يُرسل للخادم في الخلفية (أو عند عودة الإنترنت).
-const OUTBOX_KEY = "isp_outbox_v1", CACHE_KEY = "isp_cache_v1";
-let outbox = [];
-try{ outbox = JSON.parse(localStorage.getItem(OUTBOX_KEY) || "[]"); }catch(e){}
-let syncing = false, justSynced = false;
+// ======================= TOAST =======================
+function showToast(msg, ms=2200){
+  const old = document.getElementById('isp-toast');
+  if(old) old.remove();
+  const el = document.createElement('div');
+  el.id = 'isp-toast';
+  el.className = 'isp-toast';
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(()=>{ if(el && el.parentNode) el.remove(); }, ms);
+}
 
-function saveOutbox(){ try{ localStorage.setItem(OUTBOX_KEY, JSON.stringify(outbox)); }catch(e){} }
-function saveCache(){ try{ localStorage.setItem(CACHE_KEY, JSON.stringify({customers:state.customers, pricing:state.pricing, payments:state.payments})); }catch(e){} }
+// ======================= OFFLINE CACHE + OUTBOX =======================
+function cacheData(){
+  try{ localStorage.setItem('isp_cache', JSON.stringify({customers:state.customers, pricing:state.pricing, payments:state.payments, ts:Date.now()})); }catch(e){}
+}
 function loadCache(){
-  try{
-    const c = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
-    if(!c) return false;
-    state.customers = c.customers || []; state.pricing = c.pricing || DEFAULT_PRICING; state.payments = c.payments || {};
-    return true;
-  }catch(e){ return false; }
+  try{ return JSON.parse(localStorage.getItem('isp_cache')||'null'); }catch(e){ return null; }
 }
-
-// تطبيق عملية على البيانات المحلية (آمن للتكرار)
-function applyOp(op){
-  const p = op.payload;
-  if(op.action==="setPaymentStatus"){
-    const k = `${p.customerId}:${p.month}`;
-    if(p.status==="unpaid") delete state.payments[k];
-    else state.payments[k] = { status:p.status, amount:p.amount||0, date:p.clientTime, recordedBy:op.actorName };
-  } else if(op.action==="editCustomer"){
-    const c = state.customers.find(x=>x.id===p.id);
-    if(c) Object.assign(c, p.patch, { lastEditedBy: op.actorName });
-  } else if(op.action==="toggleActive"){
-    const c = state.customers.find(x=>x.id===p.id);
-    if(c) c.active = op.active;
+function getOutbox(){ try{ return JSON.parse(localStorage.getItem('isp_outbox')||'[]'); }catch(e){ return []; } }
+function setOutbox(arr){ try{ localStorage.setItem('isp_outbox', JSON.stringify(arr)); }catch(e){} }
+function queueOutbox(action, payload){
+  const q = getOutbox();
+  q.push({action, payload});
+  setOutbox(q);
+}
+async function trySyncOutbox(){
+  let q = getOutbox();
+  if(q.length===0) return;
+  const remaining = [];
+  let syncedAny = false;
+  for(const item of q){
+    const res = await api(item.action, item.payload);
+    if(res.networkError){ remaining.push(item); }
+    else { syncedAny = true; }
+  }
+  setOutbox(remaining);
+  if(syncedAny){
+    showToast(`تمت مزامنة ${q.length - remaining.length} تغيير معلّق ✓`);
+    await loadAllData();
   }
 }
+window.addEventListener('online', trySyncOutbox);
 
-function queueOp(action, payload, extra={}){
-  const op = { opId: Date.now()+"_"+Math.random().toString(36).slice(2,6), action, payload,
-               actorName: state.user?.name, actorRole: state.user?.role, ...extra };
-  payload.actorName = op.actorName; payload.actorRole = op.actorRole;
-  if(action==="setPaymentStatus"){ // تعديلات متكررة على نفس الخلية قبل الإرسال تُدمج
-    outbox = outbox.filter(o=>!(o.action===action && !o.attempted && o.payload.customerId===payload.customerId && o.payload.month===payload.month));
+async function loadAllData(silent){
+  const cached = loadCache();
+  if(cached && !state.customers.length){
+    // instant paint from last known data while we fetch fresh data (helps on slow/offline connections)
+    state.customers = cached.customers; state.pricing = cached.pricing; state.payments = cached.payments;
   }
-  outbox.push(op); saveOutbox();
-  applyOp(op); saveCache();
-  justSynced = false;
-  refreshCurrentView(); updateSyncBadge();
-  flushOutbox();
-}
-
-async function flushOutbox(){
-  if(syncing || !outbox.length || !state.user || !navigator.onLine){ updateSyncBadge(); return; }
-  syncing = true; updateSyncBadge();
-  let done = 0; const issues = [];
-  while(outbox.length){
-    const op = outbox[0];
-    if(op.action==="setPaymentStatus" && op.payload.status==="paid"){
-      const chk = await api("checkPaymentStatus", {customerId:op.payload.customerId, month:op.payload.month});
-      if(chk.network) break;
-      // مسدد مسبقًا من مستخدم/جهاز آخر (ما لم يكن هذا إرسالنا نفسه أُعيد بعد انقطاع)
-      if(chk.ok && chk.alreadyPaid && !(op.attempted && chk.recordedBy===op.actorName)){
-        const c = state.customers.find(x=>x.id===op.payload.customerId);
-        issues.push(`${c?c.name:"زبون"} — ${monthLabelOf(op.payload.month)}: مسدد مسبقًا بتاريخ ${isoToDateStr(chk.date)} بواسطة ${chk.recordedBy||"غير معروف"}. لم يُسجَّل إدخالك.`);
-        outbox.shift(); saveOutbox(); continue;
-      }
-    }
-    op.attempted = true; saveOutbox();
-    const r = await api(op.action, op.payload);
-    if(r.network) break;
-    outbox.shift(); saveOutbox(); done++;
-    if(!r.ok) issues.push(r.error || "فشلت إحدى العمليات");
-  }
-  syncing = false;
-  if(done || issues.length){
-    justSynced = done>0 && !outbox.length;
-    await loadAllData({silent:true});
-    if(justSynced) setTimeout(()=>{ justSynced=false; updateSyncBadge(); }, 3000);
-    if(issues.length) alert("تنبيه أثناء المزامنة:\n\n" + issues.join("\n"));
-  }
-  updateSyncBadge();
-}
-
-function updateSyncBadge(){
-  const el = document.getElementById("sync-badge"); if(!el) return;
-  const n = outbox.length; let t, c;
-  if(!navigator.onLine){ t = `📴 بدون اتصال${n?` — ${n} بانتظار المزامنة`:""}`; c = "var(--warn)"; }
-  else if(syncing){ t = `🔄 جارٍ المزامنة (${n})`; c = "var(--muted)"; }
-  else if(n){ t = `⏳ ${n} بانتظار المزامنة`; c = "var(--warn)"; }
-  else if(justSynced){ t = "✓ تمت المزامنة"; c = "var(--accent)"; }
-  else { t = "🟢 متصل"; c = "var(--muted)"; }
-  el.textContent = t; el.style.color = c;
-}
-window.addEventListener("online", ()=>{ updateSyncBadge(); flushOutbox(); });
-window.addEventListener("offline", updateSyncBadge);
-document.addEventListener("visibilitychange", ()=>{ if(!document.hidden) flushOutbox(); });
-setInterval(()=>{ if(outbox.length) flushOutbox(); }, 20000);
-
-// إعادة رسم صامتة: بدون شاشة "جارِ التحميل" ومع الحفاظ على التمرير والتركيز
-function softRender(){
-  const y = window.scrollY, a = document.activeElement;
-  const id = a && a.id, s = a && a.selectionStart, e = a && a.selectionEnd;
-  render(); window.scrollTo(0, y);
-  if(id){ const n = document.getElementById(id); if(n){ n.focus(); try{ n.setSelectionRange(s,e); }catch(_){} } }
-}
-function refreshCurrentView(){
-  if(!state.user || state.loading) return;
-  if(state.view==="payments") refreshPaymentsGrid();
-  else if(state.view==="customers"){ const w = document.getElementById("customers-table-wrap"); if(w) w.innerHTML = renderCustomersTableOnly(); }
-  else if(state.view==="dashboard" || state.view==="statement") softRender();
-}
-
-async function loadAllData(opts={}){
-  const silent = !!opts.silent;
-  if(!silent){ state.loading = true; render(); }
+  if(!silent){ state.loading = !state.customers.length ? true : false; render(); }
   const res = await api("getAllData");
   if(res.ok){
     state.customers = res.customers;
     state.pricing = res.pricing && Object.keys(res.pricing).length ? res.pricing : DEFAULT_PRICING;
     state.payments = res.payments;
     state.error = "";
-    outbox.forEach(applyOp);   // التعديلات التي لم تُزامَن بعد تبقى ظاهرة
-    saveCache();
-  } else if(res.network){
-    if(!state.customers.length && !silent) state.error = "تعذر الاتصال بالخادم ولا توجد بيانات محفوظة على الجهاز.";
-  } else if(!silent){
+    cacheData();
+  } else if(res.networkError){
+    state.error = cached ? "غير متصل بالإنترنت — تُعرض آخر نسخة محفوظة محليًا." : "تعذر الاتصال بالخادم. تحقق من الإنترنت.";
+  } else {
     state.error = res.error || "تعذر تحميل البيانات";
   }
-  state.loading = false;
-  if(silent) refreshCurrentView(); else render();
+  state.loading = false; render();
+  trySyncOutbox();
 }
 
 async function loadActivityLog(){
@@ -384,6 +338,7 @@ function getStatementRows(customer){
     let status;
     if(rec && rec.status==='paid') status = 'paid';
     else if(rec && rec.status==='not_subscribed') status = 'not_subscribed';
+    else if(rec && rec.status==='unpaid') status = 'unpaid';
     else if(customer.joinMonth && m.key < customer.joinMonth) status = 'not_subscribed';
     else if(m.key > currentMonthKey) status = 'not_due_yet';
     else status = 'unpaid';
@@ -466,27 +421,76 @@ function speedBreakdownData(){
 }
 
 // ======================= ACTIONS =======================
-async function doAddCustomer(payload){
-  if(!navigator.onLine){ alert("إضافة زبون جديد تحتاج اتصالاً بالإنترنت."); return false; }
-  const r = await api("addCustomer", payload);
-  if(r.ok){ await loadAllData({silent:true}); return true; }
-  alert(r.error); return false;
+async function doAddCustomer(payload){ const r=await api("addCustomer",payload); if(r.ok) await loadAllData(); else alert(r.error); }
+async function doEditCustomer(id,patch){ const r=await api("editCustomer",{id,patch}); if(r.ok) await loadAllData(); else alert(r.error); }
+async function doToggleActive(id){ const r=await api("toggleActive",{id}); if(r.ok) await loadAllData(); else alert(r.error); }
+async function doDeleteCustomer(id){ if(!confirm("حذف نهائي — متأكد؟")) return; const r=await api("deleteCustomer",{id}); if(r.ok) await loadAllData(); else alert(r.error); }
+async function doSavePricing(pricing){ const r=await api("setPricing",{pricing}); if(r.ok) await loadAllData(); else alert(r.error); }
+
+// ======================= PWA INSTALL PROMPT =======================
+let deferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  maybeShowInstallPrompt();
+});
+window.addEventListener('appinstalled', () => {
+  try{ localStorage.setItem('isp_install_dismissed_at', String(Date.now())); }catch(e){}
+});
+
+function isStandaloneDisplay(){
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
 }
-function doEditCustomer(id,patch){ queueOp("editCustomer", {id, patch}); }
-function doToggleActive(id){
-  const c = state.customers.find(x=>x.id===id); if(!c) return;
-  queueOp("toggleActive", {id}, {active: c.active===false});
+function isIOSDevice(){
+  return /iphone|ipad|ipod/i.test(navigator.userAgent);
 }
-async function doDeleteCustomer(id){
-  if(!confirm("حذف نهائي — متأكد؟")) return;
-  if(!navigator.onLine){ alert("الحذف النهائي يحتاج اتصالاً بالإنترنت."); return; }
-  const r = await api("deleteCustomer",{id});
-  if(r.ok) await loadAllData({silent:true}); else alert(r.error);
+function maybeShowInstallPrompt(){
+  if(isStandaloneDisplay()) return;
+  if(document.getElementById('install-banner-overlay')) return;
+  let dismissedAt = 0;
+  try{ dismissedAt = Number(localStorage.getItem('isp_install_dismissed_at') || 0); }catch(e){}
+  if(dismissedAt && (Date.now() - dismissedAt) < 7*24*60*60*1000) return; // don't re-nag within a week
+  showInstallBanner();
 }
-async function doSavePricing(pricing){
-  if(!navigator.onLine){ alert("تعديل الأسعار يحتاج اتصالاً بالإنترنت."); return; }
-  const r = await api("setPricing",{pricing});
-  if(r.ok) await loadAllData({silent:true}); else alert(r.error);
+function showInstallBanner(){
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'install-banner-overlay';
+  const ios = isIOSDevice();
+  overlay.innerHTML = `
+    <div class="modal-box">
+      <div class="install-icon-row">
+        <img src="icon-192.png" onerror="this.style.display='none'" />
+        <h3 style="margin:0">ثبّت تطبيق شبكة الموسى</h3>
+      </div>
+      ${ios
+        ? `<p style="font-size:13px;color:var(--muted);margin-bottom:4px">لتثبيت التطبيق على آيفون: اضغط زر المشاركة <strong>⬆️</strong> بأسفل المتصفح، ثم اختر <strong>"إضافة إلى الشاشة الرئيسية"</strong>.</p>`
+        : `<p style="font-size:13px;color:var(--muted);margin-bottom:4px">ثبّت الصفحة على جهازك لتفتحها بسرعة متل أي تطبيق عادي، حتى بدون فتح المتصفح.</p>`}
+      <div class="modal-actions">
+        ${!ios ? `<button class="btn" onclick="triggerInstall()">تثبيت الآن</button>` : ""}
+        <button class="btn secondary" onclick="dismissInstallBanner()">${ios ? "حسنًا" : "لاحقًا"}</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+}
+function dismissInstallBanner(){
+  const el = document.getElementById('install-banner-overlay');
+  if(el) el.remove();
+  try{ localStorage.setItem('isp_install_dismissed_at', String(Date.now())); }catch(e){}
+}
+async function triggerInstall(){
+  dismissInstallBanner();
+  if(!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  await deferredInstallPrompt.userChoice;
+  deferredInstallPrompt = null;
+}
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  });
 }
 
 // ======================= LOGIN =======================
@@ -509,12 +513,12 @@ async function submitLogin(){
     }
     await loadAllData();
     render();
+    setTimeout(maybeShowInstallPrompt, 600);
   } else {
     errEl.textContent = r.error || "خطأ في تسجيل الدخول";
   }
 }
 function logout(){
-  if(outbox.length && !confirm(`يوجد ${outbox.length} تعديل لم تتم مزامنته. سيبقى محفوظًا على هذا الجهاز ويُرسل عند الدخول مجددًا مع اتصال. متابعة؟`)) return;
   state.user=null;
   sessionStorage.removeItem("isp_user");
   localStorage.removeItem("isp_user");
@@ -558,12 +562,12 @@ function render(){
       <div class="brand">شبكة<span>الموسى</span></div>
       <div class="topbar-right">
         <span class="sidebar-user-info">${state.user.name} — ${state.user.role==='admin'?'مدير':'محاسب'}</span>
-        <span id="sync-badge" class="sync-badge" onclick="flushOutbox()" title="اضغط للمزامنة الآن"></span>
         <button class="theme-toggle-btn" onclick="toggleTheme()">${isLight? '🌙 الوضع الليلي' : '☀️ الوضع النهاري'}</button>
         <button class="nav-btn" onclick="refreshData()">🔄 تحديث</button>
         <button class="nav-btn" onclick="logout()">تسجيل خروج</button>
       </div>
     </div>
+    ${getOutbox().length>0 ? `<div class="offline-banner no-print">⚠ ${getOutbox().length} تغيير بانتظار الاتصال بالإنترنت للمزامنة</div>` : ""}
     <div class="body-row">
       <div class="sidebar no-print">
         ${navItems.map(([k,l])=>`<button class="nav-btn ${state.view===k?'active':''}" onclick="setView('${k}')">${l}</button>`).join("")}
@@ -574,12 +578,12 @@ function render(){
       </div>
     </div>
   `;
-  updateSyncBadge();
 }
 let activityLogFetched = false;
 let usersFetched = false;
 function setView(v){
   state.view=v;
+  try{ localStorage.setItem('isp_last_view', v); }catch(e){}
   render();
   if(v==="activitylog" && !activityLogFetched){
     activityLogFetched = true;
@@ -601,10 +605,11 @@ function toggleTheme(){
 }
 
 async function refreshData(){
-  await flushOutbox();
-  await loadAllData({silent:true});
+  showToast("جارِ التحديث...", 60000);
+  await loadAllData();
   if(state.view==="activitylog") await loadActivityLog();
   if(state.view==="users") await loadUsers();
+  showToast(state.error ? ("تعذر التحديث: " + state.error) : "تم التحديث ✓");
 }
 
 function renderView(){
@@ -914,14 +919,13 @@ function readCustomerForm(){
 async function submitCustomerForm(){
   readCustomerForm();
   if(!customerForm.name){ alert("أدخل اسم الزبون"); return; }
-  let ok = true;
-  if(editingCustomerId) doEditCustomer(editingCustomerId, customerForm);
-  else ok = await doAddCustomer(customerForm);
-  if(ok){
+  if(editingCustomerId){
+    await doEditCustomer(editingCustomerId, customerForm);
     editingCustomerId = null;
-    customerForm = { name:"", phone:"", address:"", speed:null, mikrotik:"", notes:"", joinMonth:currentMonthKey };
-    softRender();
+  } else {
+    await doAddCustomer(customerForm);
   }
+  customerForm = { name:"", phone:"", address:"", speed:null, mikrotik:"", notes:"", joinMonth:currentMonthKey };
 }
 function startEditCustomer(id){
   const c = state.customers.find(x=>x.id===id);
@@ -934,98 +938,83 @@ function cancelEditCustomer(){ editingCustomerId=null; customerForm={ name:"", p
 
 // ======================= PAYMENTS (Excel-like year grid) =======================
 if(state.paymentsSearch === undefined) state.paymentsSearch = "";
-if(state.paymentsSort === undefined) state.paymentsSort = "name_asc";
-if(state.paymentsFilter === undefined) state.paymentsFilter = "all";
 
-const PAYMENTS_SORT_OPTIONS = [
-  ["name_asc","الاسم (أ ← ي)"],
-  ["name_desc","الاسم (ي ← أ)"],
-  ["debt_desc","الأكثر دينًا أولاً"],
-  ["debt_asc","الأقل دينًا أولاً"],
-  ["months_desc","الأكثر أشهرًا متأخرة"],
-  ["months_asc","الأقل أشهرًا متأخرة"],
-  ["mikrotik_asc","حساب المايكروتك (أ ← ي)"],
-  ["speed_desc","الباقة (الأعلى أولاً)"],
-  ["speed_asc","الباقة (الأدنى أولاً)"],
-  ["join_desc","الأحدث اشتراكًا"],
-  ["join_asc","الأقدم اشتراكًا"],
-];
-const PAYMENTS_FILTER_OPTIONS = [
-  ["all","الكل"],
-  ["debtors","عليهم متأخرات"],
-  ["late_now","لم يدفعوا الشهر الحالي"],
-  ["clear","مسدّدون بالكامل"],
-];
+if(state.paymentsSort === undefined) state.paymentsSort = "name";
+if(state.paymentsFilter === undefined) state.paymentsFilter = "all";
 
 function renderPayments(){
   return `
   <h1 class="page-title">الدفعات — 2026</h1>
   <div class="form-row">
     <div style="flex:1;min-width:220px">
-      <label>بحث بالاسم / حساب المايكروتك</label>
+      <label style="display:block;font-size:12.5px;color:var(--muted);margin-bottom:4px">بحث بالاسم / حساب المايكروتك</label>
       <input id="payments-search-input" style="width:100%" value="${state.paymentsSearch}" oninput="onPaymentsSearchInput(this.value)" placeholder="اكتب للبحث..." />
     </div>
-    <div style="min-width:190px">
-      <label>ترتيب حسب</label>
-      <select id="payments-sort-select" onchange="onPaymentsSortChange(this.value)">
-        ${PAYMENTS_SORT_OPTIONS.map(([v,t])=>`<option value="${v}" ${v===state.paymentsSort?'selected':''}>${t}</option>`).join("")}
+    <div>
+      <label style="display:block;font-size:12.5px;color:var(--muted);margin-bottom:4px">ترتيب حسب</label>
+      <select onchange="state.paymentsSort=this.value; render()">
+        <option value="name" ${state.paymentsSort==="name"?"selected":""}>الاسم</option>
+        <option value="mikrotik" ${state.paymentsSort==="mikrotik"?"selected":""}>اسم حساب المايكروتك</option>
+        <option value="most_debt" ${state.paymentsSort==="most_debt"?"selected":""}>الأكثر ديناً</option>
+        <option value="most_paid" ${state.paymentsSort==="most_paid"?"selected":""}>الأكثر دفعاً</option>
+        <option value="most_overdue" ${state.paymentsSort==="most_overdue"?"selected":""}>عدد الأشهر المتأخرة</option>
       </select>
     </div>
-    <div style="min-width:170px">
-      <label>عرض</label>
-      <select id="payments-filter-select" onchange="onPaymentsFilterChange(this.value)">
-        ${PAYMENTS_FILTER_OPTIONS.map(([v,t])=>`<option value="${v}" ${v===state.paymentsFilter?'selected':''}>${t}</option>`).join("")}
+    <div>
+      <label style="display:block;font-size:12.5px;color:var(--muted);margin-bottom:4px">إظهار</label>
+      <select onchange="state.paymentsFilter=this.value; render()">
+        <option value="all" ${state.paymentsFilter==="all"?"selected":""}>الكل</option>
+        <option value="has_debt" ${state.paymentsFilter==="has_debt"?"selected":""}>عليهم ديون فقط</option>
+        <option value="no_debt" ${state.paymentsFilter==="no_debt"?"selected":""}>بدون ديون فقط</option>
+        <option value="not_subscribed" ${state.paymentsFilter==="not_subscribed"?"selected":""}>غير مشتركين حاليًا</option>
       </select>
     </div>
   </div>
   <div class="panel">
-    <div style="color:var(--muted);font-size:12px;margin-bottom:10px">اضغط أي خلية لتسجيل مبلغ، أو "لم يدفع"، أو "غير مشترك" عن ذلك الشهر. ويمكنك الضغط على عنوان عمود (الاسم، الباقة، المتراكم...) لترتيب الجدول.</div>
-    <div id="payments-summary" style="font-size:13px;margin-bottom:10px">${renderPaymentsSummary()}</div>
-    <div id="payments-grid-wrap" style="overflow-x:auto">${renderPaymentsGridOnly()}</div>
+    <div style="color:var(--muted);font-size:12px;margin-bottom:10px">اضغط أي خلية لتسجيل مبلغ، أو "لم يدفع"، أو "غير مشترك" عن ذلك الشهر. الاسم وحساب المايكروتك ثابتان عند التمرير أفقيًا، ورأس الجدول ثابت عند التمرير لأسفل.</div>
+    <div id="payments-grid-wrap">${renderPaymentsGridOnly()}</div>
   </div>
   `;
 }
 
+function customerTotals(c){
+  const rows = getStatementRows(c);
+  const totalDebt = rows.filter(r=>r.status==='unpaid').reduce((s,r)=>s+r.due,0);
+  const totalPaid = rows.filter(r=>r.status==='paid').reduce((s,r)=>s+r.amount,0);
+  const overdueCount = rows.filter(r=>r.status==='unpaid').length;
+  const lastStatus = rows.slice().reverse().find(r=>r.status!=='not_due_yet')?.status || 'unpaid';
+  return { totalDebt, totalPaid, overdueCount, lastStatus };
+}
+
 function filteredGridCustomers(){
   const term = (state.paymentsSearch||"").trim().toLowerCase();
-  let list = customerStatsList();
+  const sort = state.paymentsSort || "name";
+  const filter = state.paymentsFilter || "all";
+  let list = enabledCustomers().slice();
   if(term){
     list = list.filter(c => (c.name||"").toLowerCase().includes(term) || (c.mikrotik||"").toLowerCase().includes(term));
   }
-  const f = state.paymentsFilter;
-  if(f==='debtors') list = list.filter(c=>c.unpaidCount>0);
-  else if(f==='late_now') list = list.filter(c=>c.lateNow);
-  else if(f==='clear') list = list.filter(c=>c.unpaidCount===0);
-
-  const [key, dir] = state.paymentsSort.split("_");
-  const mul = dir==='desc' ? -1 : 1;
-  const byName = (a,b)=> (a.name||"").localeCompare(b.name||"", 'ar');
-  list.sort((a,b)=>{
-    let r = 0;
-    if(key==='name') return mul*byName(a,b);
-    if(key==='mikrotik'){
-      // الحسابات الفارغة دائمًا في الآخر
-      if(!a.mikrotik && b.mikrotik) return 1;
-      if(a.mikrotik && !b.mikrotik) return -1;
-      r = (a.mikrotik||"").localeCompare(b.mikrotik||"", 'en', {numeric:true});
-    }
-    else if(key==='debt')   r = a.debtAmount - b.debtAmount;
-    else if(key==='months') r = a.unpaidCount - b.unpaidCount;
-    else if(key==='speed')  r = (a.speed||0) - (b.speed||0);
-    else if(key==='join')   r = (a.joinMonth||"").localeCompare(b.joinMonth||"");
-    return (mul*r) || byName(a,b);
-  });
+  if(filter!=="all"){
+    list = list.filter(c=>{
+      const t = customerTotals(c);
+      if(filter==="has_debt") return t.totalDebt>0;
+      if(filter==="no_debt") return t.totalDebt===0;
+      if(filter==="not_subscribed") return t.lastStatus==='not_subscribed';
+      return true;
+    });
+  }
+  if(sort==="mikrotik"){
+    list.sort((a,b)=> (a.mikrotik||"").localeCompare(b.mikrotik||"", 'ar'));
+  } else if(sort==="most_debt"){
+    list.sort((a,b)=> customerTotals(b).totalDebt - customerTotals(a).totalDebt);
+  } else if(sort==="most_paid"){
+    list.sort((a,b)=> customerTotals(b).totalPaid - customerTotals(a).totalPaid);
+  } else if(sort==="most_overdue"){
+    list.sort((a,b)=> customerTotals(b).overdueCount - customerTotals(a).overdueCount);
+  } else {
+    list.sort((a,b)=> (a.name||"").localeCompare(b.name||"", 'ar'));
+  }
   return list;
-}
-
-function renderPaymentsSummary(){
-  const list = filteredGridCustomers();
-  const total = list.reduce((s,c)=>s+c.debtAmount,0);
-  const withDebt = list.filter(c=>c.unpaidCount>0).length;
-  return `<span class="pill ok">${list.length} زبون</span>
-    <span class="pill late" style="margin-right:6px">${withDebt} عليهم متأخرات</span>
-    <span style="margin-right:10px;color:var(--muted)">إجمالي المتراكم:</span>
-    <b style="color:${total>0?'var(--danger)':'var(--accent)'}">${fmtMoney(total)}</b>`;
 }
 
 function gridCellContent(row){
@@ -1035,54 +1024,35 @@ function gridCellContent(row){
   return `<span style="color:var(--danger);font-weight:700">لم يدفع</span>`;
 }
 
-function paymentsSortTh(label, key){
-  const [k,d] = state.paymentsSort.split("_");
-  const arrow = k===key ? (d==='asc' ? ' ▲' : ' ▼') : '';
-  const color = k===key ? 'color:var(--text);' : '';
-  return `<th style="cursor:pointer;user-select:none;white-space:nowrap;${color}" title="اضغط للترتيب" onclick="onPaymentsHeaderSort('${key}')">${label}${arrow}</th>`;
-}
-
 function renderPaymentsGridOnly(){
-  if(enabledCustomers().length===0) return `<div class="empty">أضف زبائن أولاً من صفحة الزبائن</div>`;
   const list = filteredGridCustomers();
-  if(list.length===0) return `<div class="empty">لا نتائج مطابقة</div>`;
-  const pend = new Set(outbox.filter(o=>o.action==='setPaymentStatus').map(o=>o.payload.customerId+':'+o.payload.month));
+  if(enabledCustomers().length===0) return `<div class="empty">أضف زبائن أولاً من صفحة الزبائن</div>`;
+  if(list.length===0) return `<div class="empty">لا نتائج مطابقة للبحث</div>`;
   return `
-    <table style="min-width:1100px">
+    <table style="min-width:1100px; border-collapse:separate; border-spacing:0">
       <thead><tr>
-        ${paymentsSortTh("الاسم","name")}${paymentsSortTh("حساب المايكروتك","mikrotik")}${paymentsSortTh("الباقة","speed")}${paymentsSortTh("المتراكم","debt")}
+        <th class="col-sticky-1">الاسم</th><th class="col-sticky-2">حساب المايكروتك</th><th>الباقة</th><th>إجمالي الدين</th>
         ${FULL_YEAR_MONTHS.map(m=>`<th title="${m.label}">${m.abbr}</th>`).join("")}
       </tr></thead>
       <tbody>${list.map(c=>{
-        const debtCell = c.debtAmount>0
-          ? `<span style="color:var(--danger);font-weight:700">${fmtMoney(c.debtAmount)}</span><div style="color:var(--muted);font-size:11px">${c.unpaidCount} ${c.unpaidCount===1?'شهر':(c.unpaidCount===2?'شهران':(c.unpaidCount<=10?'أشهر':'شهرًا'))}</div>`
-          : `<span style="color:var(--accent)">مسدّد ✓</span>`;
+        const rows = getStatementRows(c);
+        const totals = customerTotals(c);
         return `<tr>
-          <td>${c.name}</td><td>${c.mikrotik||"—"}</td><td>${c.speed} ميغا</td><td style="white-space:nowrap">${debtCell}</td>
-          ${c.allRows.map(r=>`<td style="cursor:pointer;text-align:center;font-size:12px${pend.has(c.id+':'+r.key)?';box-shadow:inset 0 0 0 1px var(--warn)':''}" onclick='openGridCellModal(${JSON.stringify(c.id)},"${r.key}")'>${gridCellContent(r)}</td>`).join("")}
+          <td class="col-sticky-1">${c.name}</td>
+          <td class="col-sticky-2">${c.mikrotik||"—"}</td>
+          <td>${c.speed} ميغا</td>
+          <td style="color:${totals.totalDebt>0?'var(--danger)':'var(--muted)'};font-weight:${totals.totalDebt>0?'700':'400'}">${fmtMoney(totals.totalDebt)}</td>
+          ${rows.map(r=>`<td id="gridcell-${c.id}-${r.key}" style="cursor:pointer;text-align:center;font-size:12px" onclick='openGridCellModal(${JSON.stringify(c.id)},"${r.key}")'>${gridCellContent(r)}</td>`).join("")}
         </tr>`;
       }).join("")}</tbody>
     </table>
   `;
 }
 
-function refreshPaymentsGrid(){
+function onPaymentsSearchInput(value){
+  state.paymentsSearch = value;
   const wrap = document.getElementById("payments-grid-wrap");
   if(wrap) wrap.innerHTML = renderPaymentsGridOnly();
-  const sum = document.getElementById("payments-summary");
-  if(sum) sum.innerHTML = renderPaymentsSummary();
-  const sel = document.getElementById("payments-sort-select");
-  if(sel) sel.value = state.paymentsSort;
-}
-
-function onPaymentsSearchInput(value){ state.paymentsSearch = value; refreshPaymentsGrid(); }
-function onPaymentsSortChange(value){ state.paymentsSort = value; refreshPaymentsGrid(); }
-function onPaymentsFilterChange(value){ state.paymentsFilter = value; refreshPaymentsGrid(); }
-function onPaymentsHeaderSort(key){
-  const [k,d] = state.paymentsSort.split("_");
-  const defaultDir = (key==='debt' || key==='speed') ? 'desc' : 'asc';
-  state.paymentsSort = `${key}_${k===key ? (d==='asc' ? 'desc' : 'asc') : defaultDir}`;
-  refreshPaymentsGrid();
 }
 
 // ======================= GRID / PAYMENT CELL MODAL (shared by Payments grid and Statement page) =======================
@@ -1128,19 +1098,65 @@ function closeEditPaymentModal(){
   const el = document.getElementById('edit-payment-overlay');
   if(el) el.remove();
 }
-function saveGridCell(customerId, month){
+function applyLocalPaymentUpdate(customerId, month, status, amount, recordedBy){
+  const key = `${customerId}:${month}`;
+  if(status==='unpaid'){
+    const c = state.customers.find(x=>x.id===customerId);
+    if(c && c.joinMonth && month < c.joinMonth){
+      state.payments[key] = { status:'unpaid', amount:0, date:new Date().toISOString(), recordedBy };
+    } else {
+      delete state.payments[key];
+    }
+  } else {
+    state.payments[key] = { status, amount, date:new Date().toISOString(), recordedBy };
+  }
+  cacheData();
+
+  const c = state.customers.find(x=>x.id===customerId);
+  if(!c) return;
+  const row = getStatementRows(c).find(r=>r.key===month);
+  const gridCell = document.getElementById(`gridcell-${customerId}-${month}`);
+  if(gridCell && row) gridCell.innerHTML = gridCellContent(row);
+
+  if(state.statementCustomerId === customerId){
+    const wrap = document.getElementById('statement-body-wrap');
+    if(wrap) wrap.innerHTML = renderStatementBody(c);
+  }
+}
+
+async function saveGridCell(customerId, month){
   const c = state.customers.find(x=>x.id===customerId);
   const status = document.getElementById('gcm-status').value;
   const amount = status==='paid' ? (Number(document.getElementById('gcm-amount').value)||0) : 0;
   closeEditPaymentModal();
-  if(!c) return;
-  const rec = state.payments[`${customerId}:${month}`];
-  if(status==='paid' && rec && rec.status==='paid'){
-    alert(`هذا الشهر (${monthLabelOf(month)}) مسدد مسبقًا لـ ${c.name} بتاريخ ${isoToDateStr(rec.date)} بواسطة ${rec.recordedBy||"غير معروف"}. لم يتم تسجيل أي تعديل جديد.`);
+
+  if(status==='paid' && navigator.onLine!==false){
+    const check = await api("checkPaymentStatus", {customerId, month});
+    if(check.ok && check.alreadyPaid){
+      alert(`هذا الشهر (${monthLabelOf(month)}) مسدد مسبقًا لـ ${c.name} بتاريخ ${isoToDateStr(check.date)} بواسطة ${check.recordedBy||"غير معروف"}. لم يتم تسجيل أي تعديل جديد.`);
+      applyLocalPaymentUpdate(customerId, month, 'paid', check.amount, check.recordedBy);
+      return;
+    }
+  }
+
+  // optimistic: patch the UI instantly, no full page reload / scroll jump
+  applyLocalPaymentUpdate(customerId, month, status, amount, state.user.name);
+
+  const res = await api("setPaymentStatus", {customerId, month, status, amount});
+  if(res.networkError){
+    queueOutbox("setPaymentStatus", {customerId, month, status, amount});
+    showToast("لا يوجد اتصال — سيُحفظ تلقائيًا عند عودة الإنترنت");
     return;
   }
-  queueOp("setPaymentStatus", {customerId, month, status, amount, clientTime:new Date().toISOString()});
-  if(status==='paid') window.open(waLink(c.phone, buildConfirmMessage(c, monthLabelOf(month), amount)), "_blank");
+  if(!res.ok){
+    showToast("تعذر الحفظ: " + (res.error||""));
+    await loadAllData();
+    return;
+  }
+
+  if(status==='paid' && confirm("تم تسجيل الدفعة. هل تريد إرسال تأكيد عبر واتساب؟")){
+    window.open(waLink(c.phone, buildConfirmMessage(c, monthLabelOf(month), amount)), "_blank");
+  }
 }
 
 // ======================= STATEMENT =======================
@@ -1151,26 +1167,13 @@ function statusPill(status){
   return '<span class="pill late">لم يدفع</span>';
 }
 
-function renderStatement(){
-  if(!state.statementCustomerId && state.customers.length) state.statementCustomerId = state.customers[0].id;
-  const customer = state.customers.find(c=>c.id===state.statementCustomerId);
-  let rows = [], totalPaid=0, totalDue=0, unpaidCount=0;
-  if(customer){
-    rows = getStatementRows(customer);
-    totalPaid = rows.reduce((s,r)=>s+(r.status==='paid'?r.amount:0),0);
-    totalDue = rows.reduce((s,r)=>s+(r.status==='unpaid'?r.due:0),0);
-    unpaidCount = rows.filter(r=>r.status==='unpaid').length;
-  }
+function renderStatementBody(customer){
+  if(!customer) return `<div class="panel"><div class="empty">أضف زبائن أولاً من صفحة الزبائن</div></div>`;
+  const rows = getStatementRows(customer);
+  const totalPaid = rows.reduce((s,r)=>s+(r.status==='paid'?r.amount:0),0);
+  const totalDue = rows.reduce((s,r)=>s+(r.status==='unpaid'?r.due:0),0);
+  const unpaidCount = rows.filter(r=>r.status==='unpaid').length;
   return `
-  <h1 class="page-title">كشف حساب الزبون</h1>
-  <div class="panel no-print">
-    <label style="display:block;font-size:12.5px;color:var(--muted);margin-bottom:6px">اختر الزبون</label>
-    <select onchange="state.statementCustomerId=this.value; render()" style="min-width:220px">
-      ${state.customers.length===0?`<option value="">لا يوجد زبائن</option>`:
-        state.customers.map(c=>`<option value="${c.id}" ${c.id===state.statementCustomerId?'selected':''}>${c.name}${c.active===false?' (معطّل)':''}</option>`).join("")}
-    </select>
-  </div>
-  ${!customer?`<div class="panel"><div class="empty">أضف زبائن أولاً من صفحة الزبائن</div></div>`:`
   <div class="panel no-print" style="display:flex;gap:10px;flex-wrap:wrap">
     <button class="btn" onclick="window.print()">طباعة / حفظ PDF</button>
     <button class="btn secondary" onclick='sendStatementWA()'>إرسال عبر واتساب</button>
@@ -1191,18 +1194,37 @@ function renderStatement(){
       <div class="stat-card accent"><div class="label">إجمالي المدفوع</div><div class="value">${fmtMoney(totalPaid)}</div></div>
       <div class="stat-card danger"><div class="label">إجمالي المتبقي</div><div class="value">${fmtMoney(totalDue)}</div></div>
     </div>
-  </div>`}
+  </div>`;
+}
+
+function renderStatement(){
+  if(!state.statementCustomerId && state.customers.length) state.statementCustomerId = state.customers[0].id;
+  const customer = state.customers.find(c=>c.id===state.statementCustomerId);
+  return `
+  <h1 class="page-title">كشف حساب الزبون</h1>
+  <div class="panel no-print">
+    <label style="display:block;font-size:12.5px;color:var(--muted);margin-bottom:6px">اختر الزبون</label>
+    <select onchange="state.statementCustomerId=this.value; render()" style="min-width:220px">
+      ${state.customers.length===0?`<option value="">لا يوجد زبائن</option>`:
+        state.customers.map(c=>`<option value="${c.id}" ${c.id===state.statementCustomerId?'selected':''}>${c.name}${c.active===false?' (معطّل)':''}</option>`).join("")}
+    </select>
+  </div>
+  <div id="statement-body-wrap">${renderStatementBody(customer)}</div>
   `;
 }
-function payAllOverdueForCustomer(id){
+async function payAllOverdueForCustomer(id){
+  await loadAllData();
   const customer = state.customers.find(c=>c.id===id);
   if(!customer) return;
-  const unpaid = getStatementRows(customer).filter(r=>r.status==='unpaid');
+  const rows = getStatementRows(customer);
+  const unpaid = rows.filter(r=>r.status==='unpaid');
   if(unpaid.length===0){ alert("لا يوجد أشهر متأخرة لهذا الزبون."); return; }
   const total = unpaid.reduce((s,r)=>s+r.due,0);
   if(!confirm(`رح يتسجل دفع ${unpaid.length} شهر بإجمالي ${fmtMoney(total)} لـ ${customer.name}. متأكد؟`)) return;
-  const now = new Date().toISOString();
-  unpaid.forEach(r=> queueOp("setPaymentStatus", {customerId:customer.id, month:r.key, status:'paid', amount:r.due, clientTime:now}));
+  for(const r of unpaid){
+    await api("setPaymentStatus", {customerId:customer.id, month:r.key, status:'paid', amount:r.due});
+  }
+  await loadAllData();
 }
 function sendStatementWA(){
   const customer = state.customers.find(c=>c.id===state.statementCustomerId);
@@ -1251,14 +1273,14 @@ async function savePricingDraft(){ await doSavePricing(pricingDraft); pricingDra
   const saved = localStorage.getItem("isp_user") || sessionStorage.getItem("isp_user");
   if(saved){
     state.user = JSON.parse(saved);
-    if(loadCache()){
-      // نعرض البيانات المحفوظة فورًا (تعمل بدون إنترنت) ثم نزامن في الخلفية
-      outbox.forEach(applyOp);
-      render();
-      if(outbox.length) flushOutbox(); else loadAllData({silent:true});
-      return;
-    }
+    try{
+      const lastView = localStorage.getItem('isp_last_view');
+      if(lastView) state.view = lastView;
+    }catch(e){}
     await loadAllData();
+    if(state.view==="activitylog"){ activityLogFetched = true; loadActivityLog(); }
+    if(state.view==="users"){ usersFetched = true; loadUsers(); }
+    setTimeout(maybeShowInstallPrompt, 600);
   }
   render();
 })();
