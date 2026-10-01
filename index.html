@@ -1,0 +1,1267 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>شبكة الموسى للإنترنيت — إدارة الزبائن والدفعات</title>
+<script>
+(function(){ try{ if(localStorage.getItem('isp_theme')==='light') document.documentElement.setAttribute('data-theme','light'); }catch(e){} })();
+</script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&family=IBM+Plex+Sans+Arabic:wght@400;500;600&display=swap');
+:root {
+  --bg: #10161d; --panel: #19222c; --panel-2: #202b37; --border: #2b3948;
+  --text: #e7edf3; --muted: #8b9bab; --accent: #38c98f; --accent-dim: rgba(56,201,143,0.15);
+  --warn: #eab04d; --warn-dim: rgba(234,176,77,0.15); --danger: #e2604f; --danger-dim: rgba(226,96,79,0.15);
+}
+html[data-theme="light"] {
+  --bg: #f4f6f9; --panel: #ffffff; --panel-2: #eef1f5; --border: #dde3ea;
+  --text: #1b232c; --muted: #5b6672; --accent-dim: rgba(30,163,110,0.12);
+  --warn-dim: rgba(200,140,20,0.12); --danger-dim: rgba(200,70,55,0.12);
+  --accent: #1ea36e; --warn: #b9861a; --danger: #c84637;
+}
+* { box-sizing: border-box; }
+body { margin:0; font-family:'IBM Plex Sans Arabic', sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+h1,h2,h3 { font-family:'Tajawal', sans-serif; margin:0; }
+#root { display:flex; flex-direction:column; min-height:100vh; width:100%; }
+.topbar { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; padding:12px 20px; background:var(--panel); border-bottom:1px solid var(--border); }
+.topbar-right { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.body-row { display:flex; flex:1; width:100%; min-height:0; }
+.sidebar { width:210px; flex-shrink:0; background:var(--panel); border-left:1px solid var(--border); padding:14px; display:flex; flex-direction:column; gap:4px; }
+.brand { font-family:'Tajawal', sans-serif; font-weight:900; font-size:18px; padding:0 6px; }
+.brand span { color:var(--accent); }
+.nav-btn { text-align:right; background:transparent; border:none; color:var(--muted); padding:10px 12px; border-radius:8px; font-size:14.5px; font-family:inherit; cursor:pointer; }
+.nav-btn:hover { background:var(--panel-2); color:var(--text); }
+.nav-btn.active { background:var(--accent-dim); color:var(--accent); font-weight:600; }
+.main { flex:1; padding:24px 28px; min-width:0; overflow-x:auto; }
+.page-title { font-size:22px; font-weight:900; margin-bottom:18px; }
+.stat-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(160px,1fr)); gap:12px; margin-bottom:22px; }
+.stat-card { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:14px 16px; }
+.stat-card .label { color:var(--muted); font-size:12.5px; margin-bottom:6px; }
+.stat-card .value { font-family:'Tajawal', sans-serif; font-weight:900; font-size:22px; }
+.stat-card .sub { color:var(--muted); font-size:11.5px; margin-top:4px; }
+.stat-card.accent .value { color:var(--accent); }
+.stat-card.warn .value { color:var(--warn); }
+.stat-card.danger .value { color:var(--danger); }
+.panel { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:16px; margin-bottom:18px; }
+.panel h3 { font-size:15px; margin-bottom:12px; }
+.chart-grid { display:grid; grid-template-columns:1.6fr 1fr; gap:14px; margin-bottom:18px; }
+@media (max-width:900px){ .chart-grid{ grid-template-columns:1fr; } }
+table { width:100%; border-collapse:collapse; font-size:13.5px; }
+th,td { text-align:right; padding:9px 10px; border-bottom:1px solid var(--border); }
+th { color:var(--muted); font-weight:500; font-size:12.5px; }
+tr:last-child td { border-bottom:none; }
+.pill { display:inline-block; padding:2px 9px; border-radius:999px; font-size:12px; }
+.pill.ok { background:var(--accent-dim); color:var(--accent); }
+.pill.late { background:var(--danger-dim); color:var(--danger); }
+.pill.warn { background:var(--warn-dim); color:var(--warn); }
+.btn { background:var(--accent); color:#06231a; border:none; padding:8px 16px; border-radius:8px; font-weight:700; font-size:13.5px; cursor:pointer; font-family:inherit; }
+.btn.secondary { background:var(--panel-2); color:var(--text); border:1px solid var(--border); }
+.btn.danger { background:var(--danger-dim); color:var(--danger); }
+.btn.small { padding:5px 11px; font-size:12.5px; }
+input, select { background:var(--panel-2); border:1px solid var(--border); color:var(--text); padding:8px 10px; border-radius:7px; font-size:13.5px; font-family:inherit; }
+.form-row { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px; align-items:flex-end; }
+.form-row label { font-size:12.5px; color:var(--muted); display:block; margin-bottom:4px; }
+.empty { color:var(--muted); font-size:13.5px; padding:14px 0; text-align:center; }
+.sync-badge { font-size:12.5px; cursor:pointer; padding:4px 10px; border:1px solid var(--border); border-radius:999px; white-space:nowrap; }
+.save-warn { color:var(--danger); font-size:12.5px; margin-bottom:10px; }
+.section-heading { display:flex; align-items:baseline; justify-content:space-between; margin-bottom:12px; }
+.count-badge { color:var(--muted); font-size:12px; }
+.login-wrap { display:flex; align-items:center; justify-content:center; min-height:100vh; width:100%; }
+.login-box { background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:32px; width:320px; }
+.login-box h1 { font-size:20px; margin-bottom:4px; }
+.login-box p { color:var(--muted); font-size:13px; margin:0 0 18px; }
+.login-box input { width:100%; margin-bottom:10px; }
+.login-box .btn { width:100%; }
+.err-msg { color:var(--danger); font-size:12.5px; margin-bottom:10px; min-height:14px; }
+.action-cell { display:flex; gap:6px; flex-wrap:wrap; }
+.theme-toggle-btn { background:var(--panel-2); border:1px solid var(--border); color:var(--text); padding:8px 12px; border-radius:8px; font-size:13px; cursor:pointer; font-family:inherit; text-align:right; }
+.sidebar-spacer { flex:1; }
+.sidebar-user-info { color:var(--muted); font-size:12px; padding:8px 12px; }
+.modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.55); display:flex; align-items:center; justify-content:center; z-index:1000; padding:16px; }
+.modal-box { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:20px; width:100%; max-width:360px; }
+.modal-box h3 { margin-bottom:14px; font-size:16px; }
+.modal-actions { display:flex; gap:8px; margin-top:16px; flex-wrap:wrap; }
+@media (max-width:720px){
+  .body-row{ flex-direction:column; }
+  .topbar{ padding:10px 12px; }
+  .topbar .brand{ font-size:16px; }
+  .sidebar{
+    width:100%; flex-direction:row; flex-wrap:wrap; align-items:center;
+    overflow-x:visible; border-left:none; border-bottom:1px solid var(--border);
+    padding:10px 12px; gap:6px;
+  }
+  .nav-btn, .theme-toggle-btn{ padding:8px 10px; font-size:13px; }
+  .main{ padding:12px; }
+  .page-title{ font-size:18px; }
+  .stat-grid{ grid-template-columns:repeat(2, 1fr); gap:8px; }
+  .stat-card{ padding:10px 12px; }
+  .stat-card .value{ font-size:18px; }
+  .form-row{ flex-direction:column; align-items:stretch; }
+  .form-row > div{ width:100%; min-width:0; }
+  .form-row input, .form-row select{ width:100%; }
+  .panel{ padding:12px; }
+  table{ min-width:640px; width:auto; font-size:12.5px; }
+  th,td{ padding:7px 8px; }
+  .login-box{ width:90vw; max-width:340px; padding:24px; }
+}
+@media (max-width:420px){
+  .stat-grid{ grid-template-columns:1fr; }
+}
+@media print {
+  body{ background:#fff; color:#111; }
+  .sidebar,.no-print{ display:none !important; }
+  .main{ padding:0; }
+  .print-area{ border:none; background:#fff; color:#111; }
+  .print-area th,.print-area td{ border-color:#ccc; color:#111; }
+}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script>
+// ======================= CONFIG =======================
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwQTglWdL7Zuc9R0Yh-1sbIzQBctT2aA2xhoCchu4630z5Ns2U7iQEbiBmW5sUbV-E_LA/exec";
+const ARABIC_MONTHS = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
+const DEFAULT_PRICING = { 2:120000, 3:150000, 5:225000, 8:320000, 12:450000 };
+
+// ======================= STATE =======================
+let state = {
+  user: null,
+  view: "dashboard",
+  customers: [],
+  pricing: DEFAULT_PRICING,
+  payments: {},
+  loading: false,
+  error: "",
+  statementCustomerId: null,
+  activityLog: [],
+  activityLogLoading: false,
+  usersList: [],
+  usersLoading: false,
+};
+
+const months = generateMonths();
+const currentMonthKey = months[months.length - 1].key;
+
+const FULL_YEAR_MONTHS = Array.from({length:12}, (_,i)=>({ key: monthKeyOf(2026, i+1), label: `${ARABIC_MONTHS[i]} 2026`, abbr: String(i+1) }));
+
+// ======================= HELPERS =======================
+function fmtMoney(n) { return (Number(n) || 0).toLocaleString("en-US") + " ل.س"; }
+function monthKeyOf(y,m){ return `${y}-${String(m).padStart(2,"0")}`; }
+function generateMonths(){
+  const now = new Date();
+  const endY = now.getFullYear(), endM = now.getMonth()+1;
+  const out = []; let y=2026,m=1,guard=0;
+  while((y<endY || (y===endY && m<=endM)) && guard<240){
+    out.push({key:monthKeyOf(y,m), label:`${ARABIC_MONTHS[m-1]} ${y}`});
+    m++; if(m>12){m=1;y++;} guard++;
+  }
+  if(out.length===0) out.push({key:monthKeyOf(2026,1), label:`${ARABIC_MONTHS[0]} 2026`});
+  return out;
+}
+function todayStr(){ const d=new Date(); return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`; }
+function isoToDateStr(iso){ if(!iso) return "—"; const d=new Date(iso); return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`; }
+function monthsPhrase(n){
+  if(n===1) return "شهر واحد";
+  if(n===2) return "شهرين";
+  return `${n} أشهر`;
+}
+function toWhatsAppNumber(phone){
+  let p=(phone||"").replace(/[^\d+]/g,"");
+  if(p.startsWith("+")) return p.slice(1);
+  if(p.startsWith("963")) return p;
+  if(p.startsWith("0")) return "963"+p.slice(1);
+  return p; // already has its own country code (entered without a leading +)
+}
+function waLink(phone,message){ return `https://wa.me/${toWhatsAppNumber(phone)}?text=${encodeURIComponent(message)}`; }
+function priceFor(speed){ return state.pricing[speed] ?? 0; }
+function monthLabelOf(key){ return months.find(m=>m.key===key)?.label || key || "—"; }
+
+function buildReminderMessage(c, unpaidMonths, debtAmount){
+  const list = unpaidMonths.map(m=>m.label).join("، ");
+  return `مرحبًا ${c.name}،
+نذكّركم بوجود دفعات مستحقة على حساب الإنترنت (${c.mikrotik || "—"}) عن الأشهر التالية: ${list}.
+المبلغ الإجمالي المتراكم: ${fmtMoney(debtAmount)}.
+تاريخ الإبلاغ: ${todayStr()}.
+نرجو التكرم بالتسديد في أقرب وقت ممكن. شكرًا لتعاونكم.`;
+}
+function buildConfirmMessage(c, monthLabel, amount){
+  return `مرحبًا ${c.name}،
+نؤكد استلام دفعتكم عن شهر ${monthLabel} بمبلغ ${fmtMoney(amount)} لحساب الإنترنت (${c.mikrotik || "—"}).
+شكرًا لتعاملكم معنا.
+تاريخ التأكيد: ${todayStr()}`;
+}
+function buildStatementMessage(c, rows, totalPaid, totalDue){
+  const lines = rows.map(r => {
+    if(r.status==='paid') return `${r.label}: مدفوع (${fmtMoney(r.amount)}) بتاريخ ${isoToDateStr(r.date)}`;
+    if(r.status==='not_subscribed') return `${r.label}: غير مشترك`;
+    if(r.status==='not_due_yet') return `${r.label}: لم يحن موعده بعد`;
+    return `${r.label}: غير مدفوع`;
+  });
+  return `كشف حساب — ${c.name}
+حساب المايكروتك: ${c.mikrotik || "—"}
+الباقة: ${c.speed} ميغا
+
+${lines.join("\n")}
+
+إجمالي المدفوع: ${fmtMoney(totalPaid)}
+إجمالي المتبقي: ${fmtMoney(totalDue)}
+تاريخ الكشف: ${todayStr()}`;
+}
+
+// ======================= API =======================
+async function api(action, payload={}){
+  if(state.user){
+    if(payload.actorName===undefined) payload.actorName = state.user.name;
+    if(payload.actorRole===undefined) payload.actorRole = state.user.role;
+  }
+  const ctl = new AbortController();
+  const timer = setTimeout(()=>ctl.abort(), 30000);
+  try{
+    const res = await fetch(APPS_SCRIPT_URL, {
+      method:"POST", signal:ctl.signal,
+      headers: {"Content-Type":"text/plain;charset=utf-8"},
+      body: JSON.stringify({action, payload})
+    });
+    return await res.json();
+  } catch(e){
+    return { ok:false, network:true, error:"تعذر الاتصال بالخادم. تحقق من الإنترنت وحاول مجددًا." };
+  } finally { clearTimeout(timer); }
+}
+
+// ======================= OFFLINE CACHE + SYNC QUEUE =======================
+// كل تعديل (دفعة / تعديل زبون / تفعيل-تعطيل) يُطبَّق محليًا فورًا بدون إعادة تحميل،
+// ويُحفظ في طابور على الجهاز، ثم يُرسل للخادم في الخلفية (أو عند عودة الإنترنت).
+const OUTBOX_KEY = "isp_outbox_v1", CACHE_KEY = "isp_cache_v1";
+let outbox = [];
+try{ outbox = JSON.parse(localStorage.getItem(OUTBOX_KEY) || "[]"); }catch(e){}
+let syncing = false, justSynced = false;
+
+function saveOutbox(){ try{ localStorage.setItem(OUTBOX_KEY, JSON.stringify(outbox)); }catch(e){} }
+function saveCache(){ try{ localStorage.setItem(CACHE_KEY, JSON.stringify({customers:state.customers, pricing:state.pricing, payments:state.payments})); }catch(e){} }
+function loadCache(){
+  try{
+    const c = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
+    if(!c) return false;
+    state.customers = c.customers || []; state.pricing = c.pricing || DEFAULT_PRICING; state.payments = c.payments || {};
+    return true;
+  }catch(e){ return false; }
+}
+
+// تطبيق عملية على البيانات المحلية (آمن للتكرار)
+function applyOp(op){
+  const p = op.payload;
+  if(op.action==="setPaymentStatus"){
+    const k = `${p.customerId}:${p.month}`;
+    if(p.status==="unpaid") delete state.payments[k];
+    else state.payments[k] = { status:p.status, amount:p.amount||0, date:p.clientTime, recordedBy:op.actorName };
+  } else if(op.action==="editCustomer"){
+    const c = state.customers.find(x=>x.id===p.id);
+    if(c) Object.assign(c, p.patch, { lastEditedBy: op.actorName });
+  } else if(op.action==="toggleActive"){
+    const c = state.customers.find(x=>x.id===p.id);
+    if(c) c.active = op.active;
+  }
+}
+
+function queueOp(action, payload, extra={}){
+  const op = { opId: Date.now()+"_"+Math.random().toString(36).slice(2,6), action, payload,
+               actorName: state.user?.name, actorRole: state.user?.role, ...extra };
+  payload.actorName = op.actorName; payload.actorRole = op.actorRole;
+  if(action==="setPaymentStatus"){ // تعديلات متكررة على نفس الخلية قبل الإرسال تُدمج
+    outbox = outbox.filter(o=>!(o.action===action && !o.attempted && o.payload.customerId===payload.customerId && o.payload.month===payload.month));
+  }
+  outbox.push(op); saveOutbox();
+  applyOp(op); saveCache();
+  justSynced = false;
+  refreshCurrentView(); updateSyncBadge();
+  flushOutbox();
+}
+
+async function flushOutbox(){
+  if(syncing || !outbox.length || !state.user || !navigator.onLine){ updateSyncBadge(); return; }
+  syncing = true; updateSyncBadge();
+  let done = 0; const issues = [];
+  while(outbox.length){
+    const op = outbox[0];
+    if(op.action==="setPaymentStatus" && op.payload.status==="paid"){
+      const chk = await api("checkPaymentStatus", {customerId:op.payload.customerId, month:op.payload.month});
+      if(chk.network) break;
+      // مسدد مسبقًا من مستخدم/جهاز آخر (ما لم يكن هذا إرسالنا نفسه أُعيد بعد انقطاع)
+      if(chk.ok && chk.alreadyPaid && !(op.attempted && chk.recordedBy===op.actorName)){
+        const c = state.customers.find(x=>x.id===op.payload.customerId);
+        issues.push(`${c?c.name:"زبون"} — ${monthLabelOf(op.payload.month)}: مسدد مسبقًا بتاريخ ${isoToDateStr(chk.date)} بواسطة ${chk.recordedBy||"غير معروف"}. لم يُسجَّل إدخالك.`);
+        outbox.shift(); saveOutbox(); continue;
+      }
+    }
+    op.attempted = true; saveOutbox();
+    const r = await api(op.action, op.payload);
+    if(r.network) break;
+    outbox.shift(); saveOutbox(); done++;
+    if(!r.ok) issues.push(r.error || "فشلت إحدى العمليات");
+  }
+  syncing = false;
+  if(done || issues.length){
+    justSynced = done>0 && !outbox.length;
+    await loadAllData({silent:true});
+    if(justSynced) setTimeout(()=>{ justSynced=false; updateSyncBadge(); }, 3000);
+    if(issues.length) alert("تنبيه أثناء المزامنة:\n\n" + issues.join("\n"));
+  }
+  updateSyncBadge();
+}
+
+function updateSyncBadge(){
+  const el = document.getElementById("sync-badge"); if(!el) return;
+  const n = outbox.length; let t, c;
+  if(!navigator.onLine){ t = `📴 بدون اتصال${n?` — ${n} بانتظار المزامنة`:""}`; c = "var(--warn)"; }
+  else if(syncing){ t = `🔄 جارٍ المزامنة (${n})`; c = "var(--muted)"; }
+  else if(n){ t = `⏳ ${n} بانتظار المزامنة`; c = "var(--warn)"; }
+  else if(justSynced){ t = "✓ تمت المزامنة"; c = "var(--accent)"; }
+  else { t = "🟢 متصل"; c = "var(--muted)"; }
+  el.textContent = t; el.style.color = c;
+}
+window.addEventListener("online", ()=>{ updateSyncBadge(); flushOutbox(); });
+window.addEventListener("offline", updateSyncBadge);
+document.addEventListener("visibilitychange", ()=>{ if(!document.hidden) flushOutbox(); });
+setInterval(()=>{ if(outbox.length) flushOutbox(); }, 20000);
+
+// إعادة رسم صامتة: بدون شاشة "جارِ التحميل" ومع الحفاظ على التمرير والتركيز
+function softRender(){
+  const y = window.scrollY, a = document.activeElement;
+  const id = a && a.id, s = a && a.selectionStart, e = a && a.selectionEnd;
+  render(); window.scrollTo(0, y);
+  if(id){ const n = document.getElementById(id); if(n){ n.focus(); try{ n.setSelectionRange(s,e); }catch(_){} } }
+}
+function refreshCurrentView(){
+  if(!state.user || state.loading) return;
+  if(state.view==="payments") refreshPaymentsGrid();
+  else if(state.view==="customers"){ const w = document.getElementById("customers-table-wrap"); if(w) w.innerHTML = renderCustomersTableOnly(); }
+  else if(state.view==="dashboard" || state.view==="statement") softRender();
+}
+
+async function loadAllData(opts={}){
+  const silent = !!opts.silent;
+  if(!silent){ state.loading = true; render(); }
+  const res = await api("getAllData");
+  if(res.ok){
+    state.customers = res.customers;
+    state.pricing = res.pricing && Object.keys(res.pricing).length ? res.pricing : DEFAULT_PRICING;
+    state.payments = res.payments;
+    state.error = "";
+    outbox.forEach(applyOp);   // التعديلات التي لم تُزامَن بعد تبقى ظاهرة
+    saveCache();
+  } else if(res.network){
+    if(!state.customers.length && !silent) state.error = "تعذر الاتصال بالخادم ولا توجد بيانات محفوظة على الجهاز.";
+  } else if(!silent){
+    state.error = res.error || "تعذر تحميل البيانات";
+  }
+  state.loading = false;
+  if(silent) refreshCurrentView(); else render();
+}
+
+async function loadActivityLog(){
+  state.activityLogLoading = true; render();
+  try{
+    const res = await api("getActivityLog", {limit:300});
+    if(res.ok) state.activityLog = res.log;
+  } catch(e){ /* تجاهل، تبقى القائمة القديمة إن وجدت */ }
+  state.activityLogLoading = false; render();
+}
+
+// ======================= DERIVED DATA =======================
+function enabledCustomers(){ return state.customers.filter(c=>c.active!==false); }
+
+// Status model per (customer, month):
+//  'paid'           -> explicit record, Paid=true
+//  'not_subscribed' -> explicit record OR implied (month before joinMonth) OR implied (month in the future, not due yet)
+//  'unpaid'         -> no record, month is on/before the current month, and on/after joinMonth
+function getStatementRows(customer){
+  return FULL_YEAR_MONTHS.map(m=>{
+    const rec = state.payments[`${customer.id}:${m.key}`];
+    const due = priceFor(customer.speed);
+    let status;
+    if(rec && rec.status==='paid') status = 'paid';
+    else if(rec && rec.status==='not_subscribed') status = 'not_subscribed';
+    else if(customer.joinMonth && m.key < customer.joinMonth) status = 'not_subscribed';
+    else if(m.key > currentMonthKey) status = 'not_due_yet';
+    else status = 'unpaid';
+    return {
+      key:m.key, label:m.label, abbr:m.abbr, due, status,
+      paid: status==='paid',
+      amount: rec?.amount||0, date: rec?.date||null, recordedBy: rec?.recordedBy||""
+    };
+  });
+}
+
+function customerStatsList(){
+  return enabledCustomers().map(c=>{
+    const rows = getStatementRows(c);
+    const unpaidRows = rows.filter(r=>r.status==='unpaid');
+    const lateNow = unpaidRows.some(r=>r.key===currentMonthKey);
+    const debtAmount = unpaidRows.length * priceFor(c.speed);
+    return {...c, unpaidCount:unpaidRows.length, lateNow, unpaidMonths:unpaidRows, debtAmount, allRows:rows};
+  });
+}
+
+function dashboardData(){
+  const stats = customerStatsList();
+  const active = enabledCustomers().filter(c=> !c.joinMonth || c.joinMonth<=currentMonthKey);
+  const totalExpected = active.reduce((s,c)=>s+priceFor(c.speed),0);
+  const collectedThisMonth = enabledCustomers().reduce((s,c)=>{
+    const rec = state.payments[`${c.id}:${currentMonthKey}`];
+    return s + (rec?.status==='paid' ? rec.amount : 0);
+  },0);
+  const paidCount = enabledCustomers().filter(c=>state.payments[`${c.id}:${currentMonthKey}`]?.status==='paid').length;
+  const lateNowList = stats.filter(c=>c.lateNow);
+  const debtorsList = stats.filter(c=>c.unpaidCount>=2).sort((a,b)=>b.debtAmount-a.debtAmount);
+  const collectionRate = totalExpected>0 ? Math.round((collectedThisMonth/totalExpected)*100) : 0;
+  const totalOutstanding = stats.reduce((s,c)=>s+c.debtAmount,0);
+  const newThisMonth = enabledCustomers().filter(c=>c.joinMonth===currentMonthKey).length;
+  const avgRevenue = active.length>0 ? Math.round(totalExpected/active.length) : 0;
+  const withDebt = stats.filter(c=>c.unpaidCount>0);
+  const avgOverdueMonths = withDebt.length>0 ? (withDebt.reduce((s,c)=>s+c.unpaidCount,0)/withDebt.length).toFixed(1) : "0";
+  return { totalExpected, collectedThisMonth, paidCount, lateNowList, debtorsList, collectionRate, totalOutstanding, newThisMonth, avgRevenue, activeCount: active.length, avgOverdueMonths, withDebtCount: withDebt.length };
+}
+
+function debtAgingData(){
+  const stats = customerStatsList();
+  const buckets = [
+    { label:"شهر واحد", count:0 },
+    { label:"شهرين", count:0 },
+    { label:"3 أشهر", count:0 },
+    { label:"4+ أشهر", count:0 },
+  ];
+  stats.forEach(c=>{
+    if(c.unpaidCount<=0) return;
+    if(c.unpaidCount===1) buckets[0].count++;
+    else if(c.unpaidCount===2) buckets[1].count++;
+    else if(c.unpaidCount===3) buckets[2].count++;
+    else buckets[3].count++;
+  });
+  return buckets;
+}
+
+function monthlyTrendData(){
+  const recent = months.slice(-6);
+  return recent.map(m=>{
+    const activeAt = enabledCustomers().filter(c=> !c.joinMonth || c.joinMonth<=m.key);
+    const expected = activeAt.reduce((s,c)=>s+priceFor(c.speed),0);
+    const collected = enabledCustomers().reduce((s,c)=>{
+      const rec = state.payments[`${c.id}:${m.key}`];
+      return s + (rec?.status==='paid' ? rec.amount : 0);
+    },0);
+    return { label:m.label.split(" ")[0], expected, collected };
+  });
+}
+
+function speedBreakdownData(){
+  const map = {};
+  enabledCustomers().forEach(c=>{
+    if(!map[c.speed]) map[c.speed]={speed:c.speed,count:0,revenue:0};
+    map[c.speed].count++; map[c.speed].revenue+=priceFor(c.speed);
+  });
+  return Object.values(map).sort((a,b)=>a.speed-b.speed);
+}
+
+// ======================= ACTIONS =======================
+async function doAddCustomer(payload){
+  if(!navigator.onLine){ alert("إضافة زبون جديد تحتاج اتصالاً بالإنترنت."); return false; }
+  const r = await api("addCustomer", payload);
+  if(r.ok){ await loadAllData({silent:true}); return true; }
+  alert(r.error); return false;
+}
+function doEditCustomer(id,patch){ queueOp("editCustomer", {id, patch}); }
+function doToggleActive(id){
+  const c = state.customers.find(x=>x.id===id); if(!c) return;
+  queueOp("toggleActive", {id}, {active: c.active===false});
+}
+async function doDeleteCustomer(id){
+  if(!confirm("حذف نهائي — متأكد؟")) return;
+  if(!navigator.onLine){ alert("الحذف النهائي يحتاج اتصالاً بالإنترنت."); return; }
+  const r = await api("deleteCustomer",{id});
+  if(r.ok) await loadAllData({silent:true}); else alert(r.error);
+}
+async function doSavePricing(pricing){
+  if(!navigator.onLine){ alert("تعديل الأسعار يحتاج اتصالاً بالإنترنت."); return; }
+  const r = await api("setPricing",{pricing});
+  if(r.ok) await loadAllData({silent:true}); else alert(r.error);
+}
+
+// ======================= LOGIN =======================
+async function submitLogin(){
+  const username = document.getElementById("login-username").value.trim();
+  const password = document.getElementById("login-password").value;
+  const remember = document.getElementById("login-remember").checked;
+  const errEl = document.getElementById("login-error");
+  errEl.textContent = "";
+  if(!username || !password){ errEl.textContent = "أدخل اسم المستخدم وكلمة السر"; return; }
+  const r = await api("login", {username, password});
+  if(r.ok){
+    state.user = r.user;
+    if(remember){
+      localStorage.setItem("isp_user", JSON.stringify(r.user));
+      sessionStorage.removeItem("isp_user");
+    } else {
+      sessionStorage.setItem("isp_user", JSON.stringify(r.user));
+      localStorage.removeItem("isp_user");
+    }
+    await loadAllData();
+    render();
+  } else {
+    errEl.textContent = r.error || "خطأ في تسجيل الدخول";
+  }
+}
+function logout(){
+  if(outbox.length && !confirm(`يوجد ${outbox.length} تعديل لم تتم مزامنته. سيبقى محفوظًا على هذا الجهاز ويُرسل عند الدخول مجددًا مع اتصال. متابعة؟`)) return;
+  state.user=null;
+  sessionStorage.removeItem("isp_user");
+  localStorage.removeItem("isp_user");
+  render();
+}
+
+function renderLogin(){
+  return `
+  <div class="login-wrap">
+    <div class="login-box">
+      <h1>شبكة<span style="color:var(--accent)">الموسى</span></h1>
+      <p>سجّل الدخول لمتابعة الزبائن والدفعات</p>
+      <div class="err-msg" id="login-error"></div>
+      <input id="login-username" placeholder="اسم المستخدم" />
+      <input id="login-password" type="password" placeholder="كلمة السر" onkeydown="if(event.key==='Enter') submitLogin()" />
+      <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);margin-bottom:14px;cursor:pointer">
+        <input id="login-remember" type="checkbox" style="width:auto;margin:0" /> تذكرني
+      </label>
+      <button class="btn" onclick="submitLogin()">دخول</button>
+    </div>
+  </div>`;
+}
+
+// ======================= RENDER: SHELL =======================
+function render(){
+  const root = document.getElementById("root");
+  if(!state.user){ root.innerHTML = renderLogin(); return; }
+  const navItems = [
+    ["dashboard","الرئيسية"],
+    ["customers","الزبائن"],
+    ["payments","الدفعات"],
+    ["statement","كشف حساب"],
+    ["activitylog","سجل النشاط"],
+  ];
+  if(state.user.role==="admin"){ navItems.push(["pricing","الأسعار"]); navItems.push(["users","المستخدمون"]); }
+
+  const isLight = document.documentElement.getAttribute('data-theme')==='light';
+
+  root.innerHTML = `
+    <div class="topbar no-print">
+      <div class="brand">شبكة<span>الموسى</span></div>
+      <div class="topbar-right">
+        <span class="sidebar-user-info">${state.user.name} — ${state.user.role==='admin'?'مدير':'محاسب'}</span>
+        <span id="sync-badge" class="sync-badge" onclick="flushOutbox()" title="اضغط للمزامنة الآن"></span>
+        <button class="theme-toggle-btn" onclick="toggleTheme()">${isLight? '🌙 الوضع الليلي' : '☀️ الوضع النهاري'}</button>
+        <button class="nav-btn" onclick="refreshData()">🔄 تحديث</button>
+        <button class="nav-btn" onclick="logout()">تسجيل خروج</button>
+      </div>
+    </div>
+    <div class="body-row">
+      <div class="sidebar no-print">
+        ${navItems.map(([k,l])=>`<button class="nav-btn ${state.view===k?'active':''}" onclick="setView('${k}')">${l}</button>`).join("")}
+      </div>
+      <div class="main">
+        ${state.error ? `<div class="save-warn">${state.error}</div>` : ""}
+        ${state.loading ? `<div class="empty">جارِ التحميل...</div>` : renderView()}
+      </div>
+    </div>
+  `;
+  updateSyncBadge();
+}
+let activityLogFetched = false;
+let usersFetched = false;
+function setView(v){
+  state.view=v;
+  render();
+  if(v==="activitylog" && !activityLogFetched){
+    activityLogFetched = true;
+    loadActivityLog();
+  }
+  if(v==="users" && !usersFetched){
+    usersFetched = true;
+    loadUsers();
+  }
+}
+
+function toggleTheme(){
+  const cur = document.documentElement.getAttribute('data-theme')==='light' ? 'light' : 'dark';
+  const next = cur==='light' ? 'dark' : 'light';
+  if(next==='light') document.documentElement.setAttribute('data-theme','light');
+  else document.documentElement.removeAttribute('data-theme');
+  try{ localStorage.setItem('isp_theme', next); }catch(e){}
+  render();
+}
+
+async function refreshData(){
+  await flushOutbox();
+  await loadAllData({silent:true});
+  if(state.view==="activitylog") await loadActivityLog();
+  if(state.view==="users") await loadUsers();
+}
+
+function renderView(){
+  switch(state.view){
+    case "dashboard": return renderDashboard();
+    case "customers": return renderCustomers();
+    case "payments": return renderPayments();
+    case "statement": return renderStatement();
+    case "activitylog": return renderActivityLog();
+    case "users": return renderUsers();
+    case "pricing": return renderPricing();
+    default: return "";
+  }
+}
+
+function formatLogTime(iso){
+  if(!iso) return "—";
+  const d = new Date(iso);
+  return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+}
+function renderActivityLog(){
+  return `
+  <div class="section-heading">
+    <h1 class="page-title" style="margin-bottom:0">سجل النشاط</h1>
+    <button class="btn secondary small" onclick="activityLogFetched=false; loadActivityLog()">تحديث</button>
+  </div>
+  <div class="panel">
+    ${state.activityLogLoading ? `<div class="empty">جارِ التحميل...</div>` :
+      state.activityLog.length===0 ? `<div class="empty">لا يوجد نشاط مسجل بعد</div>` : `
+    <table><thead><tr><th>الوقت</th><th>المستخدم</th><th>الإجراء</th><th>التفاصيل</th></tr></thead>
+    <tbody>${state.activityLog.map(l=>`<tr><td>${formatLogTime(l.timestamp)}</td><td>${l.user||"—"}</td><td>${l.action||"—"}</td><td>${l.details||"—"}</td></tr>`).join("")}</tbody></table>`}
+  </div>
+  `;
+}
+
+// ======================= USERS (admin only) =======================
+async function loadUsers(){
+  state.usersLoading = true; render();
+  try{
+    const r = await api("getUsers");
+    if(r.ok) state.usersList = r.users; else state.error = r.error || "تعذر تحميل المستخدمين";
+  } catch(e){ state.error = "تعذر الاتصال بالخادم"; }
+  state.usersLoading = false; render();
+}
+async function submitNewUser(){
+  const payload = {
+    name: document.getElementById("uf-name").value.trim(),
+    username: document.getElementById("uf-username").value.trim(),
+    password: document.getElementById("uf-password").value,
+    role: document.getElementById("uf-role").value,
+    phone: document.getElementById("uf-phone").value.trim(),
+  };
+  if(!payload.name || !payload.username || !payload.password){ alert("أكمل الاسم واسم المستخدم وكلمة السر"); return; }
+  const r = await api("addUser", payload);
+  if(r.ok) await loadUsers(); else alert(r.error);
+}
+async function deleteUserRow(id){
+  if(!confirm("حذف هذا المستخدم نهائيًا؟")) return;
+  const r = await api("deleteUser", {id});
+  if(r.ok) await loadUsers(); else alert(r.error);
+}
+async function toggleUserRow(id){
+  const r = await api("toggleUserActive", {id});
+  if(r.ok) await loadUsers(); else alert(r.error);
+}
+function renderUsers(){
+  return `
+  <h1 class="page-title">المستخدمون</h1>
+  <div class="panel">
+    <h3>إضافة مستخدم جديد</h3>
+    <div class="form-row">
+      <div><label>الاسم</label><input id="uf-name" /></div>
+      <div><label>اسم المستخدم</label><input id="uf-username" /></div>
+      <div><label>كلمة السر</label><input id="uf-password" /></div>
+      <div><label>الصلاحية</label><select id="uf-role"><option value="accountant">محاسب</option><option value="admin">مدير</option></select></div>
+      <div><label>رقم الهاتف (اختياري)</label><input id="uf-phone" /></div>
+    </div>
+    <button class="btn" onclick="submitNewUser()">إضافة المستخدم</button>
+  </div>
+  <div class="panel">
+    <h3>المستخدمون الحاليون</h3>
+    ${state.usersLoading ? `<div class="empty">جارِ التحميل...</div>` :
+      state.usersList.length===0 ? `<div class="empty">لا يوجد مستخدمون</div>` : `
+    <table><thead><tr><th>الاسم</th><th>اسم المستخدم</th><th>الصلاحية</th><th>الهاتف</th><th>الحالة</th><th></th></tr></thead>
+    <tbody>${state.usersList.map(u=>{
+      const isActive = u.active!==false;
+      return `<tr style="${isActive?'':'opacity:0.55'}">
+      <td>${u.name}</td><td>${u.username}</td><td>${u.role==='admin'?'مدير':'محاسب'}</td><td>${u.phone||"—"}</td>
+      <td>${isActive?'<span class="pill ok">نشط</span>':'<span class="pill">معطّل</span>'}</td>
+      <td class="action-cell">
+        <button class="btn secondary small" onclick='toggleUserRow(${JSON.stringify(u.id)})'>${isActive?"تعطيل":"تفعيل"}</button>
+        <button class="btn danger small" onclick='deleteUserRow(${JSON.stringify(u.id)})'>حذف نهائي</button>
+      </td>
+    </tr>`;
+    }).join("")}</tbody></table>`}
+  </div>
+  `;
+}
+
+// ======================= DASHBOARD =======================
+function renderDashboard(){
+  const d = dashboardData();
+  const disabledCount = state.customers.length - enabledCustomers().length;
+  return `
+  <h1 class="page-title">نظرة عامة — ${months[months.length-1].label}</h1>
+  <div class="stat-grid">
+    <div class="stat-card"><div class="label">إجمالي الزبائن النشطين</div><div class="value">${enabledCustomers().length}</div>
+      <div class="sub">${d.newThisMonth>0?`+${d.newThisMonth} هذا الشهر`:"لا يوجد اشتراكات جديدة"} · ${disabledCount} معطّل</div></div>
+    <div class="stat-card"><div class="label">المتوقع هذا الشهر</div><div class="value">${fmtMoney(d.totalExpected)}</div>
+      <div class="sub">متوسط ${fmtMoney(d.avgRevenue)} لكل زبون</div></div>
+    <div class="stat-card accent"><div class="label">المحصّل هذا الشهر</div><div class="value">${fmtMoney(d.collectedThisMonth)}</div></div>
+    <div class="stat-card accent"><div class="label">نسبة التحصيل</div><div class="value">${d.collectionRate}%</div>
+      <div class="sub">${d.paidCount} من ${d.activeCount} دفعوا</div></div>
+    <div class="stat-card danger"><div class="label">متأخرون هذا الشهر</div><div class="value">${d.lateNowList.length}</div></div>
+    <div class="stat-card warn"><div class="label">إجمالي الديون المتراكمة</div><div class="value">${fmtMoney(d.totalOutstanding)}</div>
+      <div class="sub">${d.debtorsList.length} زبون عليهم شهرين فأكثر</div></div>
+    <div class="stat-card warn"><div class="label">متوسط مدة التأخر</div><div class="value">${d.avgOverdueMonths} شهر</div>
+      <div class="sub">بين ${d.withDebtCount} زبون عليهم دفعات متأخرة</div></div>
+  </div>
+
+  <div class="chart-grid">
+    <div class="panel"><h3>اتجاه التحصيل — آخر 6 أشهر</h3>${renderTrendBars(monthlyTrendData())}</div>
+    <div class="panel"><h3>توزيع الزبائن حسب الباقة</h3>${renderSpeedBar(speedBreakdownData())}</div>
+  </div>
+  <div class="panel"><h3>توزيع المتأخرين حسب عدد أشهر التراكم</h3>${renderAgingBars(debtAgingData())}</div>
+
+  <div class="panel">
+    <div class="section-heading"><h3>متأخرون عن دفع الشهر الحالي</h3><span class="count-badge">${d.lateNowList.length} زبون</span></div>
+    ${d.lateNowList.length===0 ? `<div class="empty">لا يوجد متأخرون هذا الشهر</div>` : `
+    <table><thead><tr><th>الاسم</th><th>حساب المايكروتك</th><th>الهاتف</th><th>الباقة</th><th>المتراكم</th><th></th></tr></thead>
+    <tbody>${d.lateNowList.map(c=>`
+      <tr><td>${c.name}</td><td>${c.mikrotik||"—"}</td><td>${c.phone}</td>
+      <td>${c.speed} ميغا <span class="pill late">${c.unpaidCount} شهر</span></td>
+      <td>${fmtMoney(c.debtAmount)}</td>
+      <td><button class="btn small" onclick='sendReminder(${JSON.stringify(c.id)})'>تذكير واتساب</button></td></tr>
+    `).join("")}</tbody></table>`}
+  </div>
+
+  <div class="panel">
+    <div class="section-heading"><h3>زبائن عليهم ديون متراكمة (شهرين فأكثر)</h3><span class="count-badge">${d.debtorsList.length} زبون</span></div>
+    ${d.debtorsList.length===0 ? `<div class="empty">لا توجد ديون متراكمة</div>` : `
+    <table><thead><tr><th>الاسم</th><th>حساب المايكروتك</th><th>الهاتف</th><th>الباقة</th><th>المتراكم</th><th></th></tr></thead>
+    <tbody>${d.debtorsList.map(c=>`
+      <tr><td>${c.name}</td><td>${c.mikrotik||"—"}</td><td>${c.phone}</td>
+      <td>${c.speed} ميغا <span class="pill warn">${c.unpaidCount} شهر</span></td>
+      <td>${fmtMoney(c.debtAmount)}</td>
+      <td><button class="btn small" onclick='sendReminder(${JSON.stringify(c.id)})'>تذكير واتساب</button></td></tr>
+    `).join("")}</tbody></table>`}
+  </div>
+  `;
+}
+function sendReminder(id){
+  const c = customerStatsList().find(x=>x.id===id);
+  if(!c) return;
+  window.open(waLink(c.phone, buildReminderMessage(c, c.unpaidMonths, c.debtAmount)), "_blank");
+}
+const PIE_COLORS = ["#38c98f","#eab04d","#4d9ceb","#e2604f","#a68df0","#5fd4d4"];
+
+function renderTrendBars(trend){
+  const maxVal = Math.max(1, ...trend.map(t=>Math.max(t.expected, t.collected)));
+  const pct = v => Math.max(v>0?4:0, Math.round(v/maxVal*100));
+  return `
+    <div class="legend-row">
+      <span class="legend-dot" style="background:var(--border)"></span> المتوقع
+      <span class="legend-dot" style="background:var(--accent);margin-right:14px"></span> المحصّل
+    </div>
+    <div style="display:flex;align-items:flex-end;gap:10px;height:160px;padding-top:10px;overflow-x:auto">
+      ${trend.map(t=>`
+        <div style="flex:1;min-width:38px;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;justify-content:flex-end">
+          <div style="display:flex;align-items:flex-end;gap:3px;height:130px">
+            <div style="width:12px;background:var(--border);height:${pct(t.expected)}%;border-radius:3px 3px 0 0" title="المتوقع: ${fmtMoney(t.expected)}"></div>
+            <div style="width:12px;background:var(--accent);height:${pct(t.collected)}%;border-radius:3px 3px 0 0" title="المحصّل: ${fmtMoney(t.collected)}"></div>
+          </div>
+          <div style="font-size:11px;color:var(--muted);white-space:nowrap">${t.label}</div>
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderSpeedBar(breakdown){
+  if(breakdown.length===0) return `<div class="empty">لا توجد بيانات بعد</div>`;
+  const total = breakdown.reduce((s,b)=>s+b.count,0) || 1;
+  return `
+    <div style="display:flex;height:22px;border-radius:6px;overflow:hidden;margin-bottom:14px">
+      ${breakdown.map((b,i)=>`<div style="width:${Math.round(b.count/total*100)}%;background:${PIE_COLORS[i%PIE_COLORS.length]}" title="${b.speed} ميغا: ${b.count} زبون"></div>`).join("")}
+    </div>
+    ${breakdown.map((b,i)=>`
+      <div class="legend-row" style="justify-content:space-between">
+        <span><span class="legend-dot" style="background:${PIE_COLORS[i%PIE_COLORS.length]}"></span> ${b.speed} ميغا</span>
+        <span>${b.count} زبون — ${fmtMoney(b.revenue)}</span>
+      </div>
+    `).join("")}
+  `;
+}
+
+function renderAgingBars(aging){
+  const maxVal = Math.max(1, ...aging.map(a=>a.count));
+  const colors = ["#eab04d","#e2924d","#e2704d","#e2604f"];
+  return aging.map((a,i)=>`
+    <div style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px">
+        <span>${a.label}</span><span style="color:var(--muted)">${a.count} زبون</span>
+      </div>
+      <div class="progress-track"><div class="progress-fill" style="width:${Math.round(a.count/maxVal*100)}%;background:${colors[i]}"></div></div>
+    </div>
+  `).join("");
+}
+
+// ======================= CUSTOMERS =======================
+let customerForm = { name:"", phone:"", address:"", speed:null, mikrotik:"", notes:"", joinMonth:currentMonthKey };
+let editingCustomerId = null;
+if(state.customerSearch === undefined) state.customerSearch = "";
+
+function renderCustomers(){
+  const speeds = Object.keys(state.pricing).map(Number).sort((a,b)=>a-b);
+  if(customerForm.speed===null) customerForm.speed = speeds[0]||2;
+  return `
+  <h1 class="page-title">الزبائن</h1>
+  <div class="panel">
+    <h3>${editingCustomerId?"تعديل بيانات زبون":"إضافة زبون جديد"}</h3>
+    <div class="form-row">
+      <div><label>الاسم</label><input id="cf-name" value="${customerForm.name}" /></div>
+      <div><label>رقم الهاتف</label><input id="cf-phone" value="${customerForm.phone}" placeholder="09xxxxxxxx" /></div>
+      <div><label>العنوان</label><input id="cf-address" value="${customerForm.address}" /></div>
+      <div><label>السرعة</label><select id="cf-speed">${speeds.map(s=>`<option value="${s}" ${s===customerForm.speed?'selected':''}>${s} ميغا — ${fmtMoney(state.pricing[s])}</option>`).join("")}</select></div>
+      <div><label>حساب المايكروتك</label><input id="cf-mikrotik" value="${customerForm.mikrotik}" /></div>
+      <div><label>مشترك اعتبارًا من</label><select id="cf-joinmonth">${months.map(m=>`<option value="${m.key}" ${m.key===customerForm.joinMonth?'selected':''}>${m.label}</option>`).join("")}</select></div>
+    </div>
+    <div class="form-row"><div style="flex:1;min-width:200px"><label>ملاحظات</label><input id="cf-notes" style="width:100%" value="${customerForm.notes}" /></div></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn" onclick="submitCustomerForm()">${editingCustomerId?"حفظ التعديل":"إضافة الزبون"}</button>
+      ${editingCustomerId?`<button class="btn secondary" onclick="cancelEditCustomer()">إلغاء</button>`:""}
+    </div>
+  </div>
+  <div class="panel">
+    <div class="form-row" style="margin-bottom:14px">
+      <div style="flex:1;min-width:220px">
+        <label>بحث بالاسم / الهاتف / حساب المايكروتك</label>
+        <input id="customer-search-input" style="width:100%" value="${state.customerSearch}" oninput="onCustomerSearchInput(this.value)" placeholder="اكتب للبحث..." />
+      </div>
+    </div>
+    <div id="customers-table-wrap">${renderCustomersTableOnly()}</div>
+  </div>
+  `;
+}
+
+function filteredCustomers(){
+  const term = (state.customerSearch||"").trim().toLowerCase();
+  if(!term) return state.customers;
+  return state.customers.filter(c =>
+    (c.name||"").toLowerCase().includes(term) ||
+    (c.phone||"").toLowerCase().includes(term) ||
+    (c.mikrotik||"").toLowerCase().includes(term)
+  );
+}
+
+function renderCustomersTableOnly(){
+  const list = filteredCustomers();
+  return `
+    <h3>قائمة الزبائن (${list.length} من ${state.customers.length})</h3>
+    ${state.customers.length===0?`<div class="empty">لا يوجد زبائن بعد</div>`:
+      list.length===0?`<div class="empty">لا نتائج مطابقة للبحث</div>`:`
+    <table><thead><tr><th>الاسم</th><th>الهاتف</th><th>الباقة</th><th>السعر</th><th>حساب المايكروتك</th><th>الحالة</th><th></th></tr></thead>
+    <tbody>${list.map(c=>{
+      const isActive = c.active!==false;
+      const metaLines = [
+        `مشترك منذ: ${monthLabelOf(c.joinMonth)}`,
+        c.notes ? `ملاحظات: ${c.notes}` : "",
+        c.addedBy ? `أضيف بواسطة: ${c.addedBy}` : "",
+        c.lastEditedBy ? `آخر تعديل: ${c.lastEditedBy}` : "",
+      ].filter(Boolean);
+      return `<tr style="${isActive?'':'opacity:0.55'}">
+        <td>${c.name}</td><td>${c.phone}</td><td>${c.speed} ميغا</td><td>${fmtMoney(state.pricing[c.speed]??0)}</td>
+        <td>
+          <div>${c.mikrotik||"—"}</div>
+          <div style="color:var(--muted);font-size:11px;margin-top:4px;line-height:1.7">${metaLines.join("<br/>")}</div>
+        </td>
+        <td>${isActive?'<span class="pill ok">نشط</span>':'<span class="pill">معطّل</span>'}</td>
+        <td class="action-cell">
+          <button class="btn secondary small" onclick='startEditCustomer(${JSON.stringify(c.id)})'>تعديل</button>
+          <button class="btn secondary small" onclick='doToggleActive(${JSON.stringify(c.id)})'>${isActive?"تعطيل":"تفعيل"}</button>
+          ${state.user.role==="admin"?`<button class="btn danger small" onclick='doDeleteCustomer(${JSON.stringify(c.id)})'>حذف نهائي</button>`:""}
+        </td>
+      </tr>`;
+    }).join("")}</tbody></table>`}
+  `;
+}
+
+function onCustomerSearchInput(value){
+  state.customerSearch = value;
+  const wrap = document.getElementById("customers-table-wrap");
+  if(wrap) wrap.innerHTML = renderCustomersTableOnly();
+}
+
+function readCustomerForm(){
+  customerForm = {
+    name: document.getElementById("cf-name").value.trim(),
+    phone: document.getElementById("cf-phone").value.trim(),
+    address: document.getElementById("cf-address").value.trim(),
+    speed: Number(document.getElementById("cf-speed").value),
+    mikrotik: document.getElementById("cf-mikrotik").value.trim(),
+    joinMonth: document.getElementById("cf-joinmonth").value,
+    notes: document.getElementById("cf-notes").value.trim(),
+  };
+}
+async function submitCustomerForm(){
+  readCustomerForm();
+  if(!customerForm.name){ alert("أدخل اسم الزبون"); return; }
+  let ok = true;
+  if(editingCustomerId) doEditCustomer(editingCustomerId, customerForm);
+  else ok = await doAddCustomer(customerForm);
+  if(ok){
+    editingCustomerId = null;
+    customerForm = { name:"", phone:"", address:"", speed:null, mikrotik:"", notes:"", joinMonth:currentMonthKey };
+    softRender();
+  }
+}
+function startEditCustomer(id){
+  const c = state.customers.find(x=>x.id===id);
+  if(!c) return;
+  editingCustomerId = id;
+  customerForm = { name:c.name, phone:c.phone, address:c.address||"", speed:c.speed, mikrotik:c.mikrotik||"", notes:c.notes||"", joinMonth:c.joinMonth||currentMonthKey };
+  render();
+}
+function cancelEditCustomer(){ editingCustomerId=null; customerForm={ name:"", phone:"", address:"", speed:null, mikrotik:"", notes:"", joinMonth:currentMonthKey }; render(); }
+
+// ======================= PAYMENTS (Excel-like year grid) =======================
+if(state.paymentsSearch === undefined) state.paymentsSearch = "";
+if(state.paymentsSort === undefined) state.paymentsSort = "name_asc";
+if(state.paymentsFilter === undefined) state.paymentsFilter = "all";
+
+const PAYMENTS_SORT_OPTIONS = [
+  ["name_asc","الاسم (أ ← ي)"],
+  ["name_desc","الاسم (ي ← أ)"],
+  ["debt_desc","الأكثر دينًا أولاً"],
+  ["debt_asc","الأقل دينًا أولاً"],
+  ["months_desc","الأكثر أشهرًا متأخرة"],
+  ["months_asc","الأقل أشهرًا متأخرة"],
+  ["mikrotik_asc","حساب المايكروتك (أ ← ي)"],
+  ["speed_desc","الباقة (الأعلى أولاً)"],
+  ["speed_asc","الباقة (الأدنى أولاً)"],
+  ["join_desc","الأحدث اشتراكًا"],
+  ["join_asc","الأقدم اشتراكًا"],
+];
+const PAYMENTS_FILTER_OPTIONS = [
+  ["all","الكل"],
+  ["debtors","عليهم متأخرات"],
+  ["late_now","لم يدفعوا الشهر الحالي"],
+  ["clear","مسدّدون بالكامل"],
+];
+
+function renderPayments(){
+  return `
+  <h1 class="page-title">الدفعات — 2026</h1>
+  <div class="form-row">
+    <div style="flex:1;min-width:220px">
+      <label>بحث بالاسم / حساب المايكروتك</label>
+      <input id="payments-search-input" style="width:100%" value="${state.paymentsSearch}" oninput="onPaymentsSearchInput(this.value)" placeholder="اكتب للبحث..." />
+    </div>
+    <div style="min-width:190px">
+      <label>ترتيب حسب</label>
+      <select id="payments-sort-select" onchange="onPaymentsSortChange(this.value)">
+        ${PAYMENTS_SORT_OPTIONS.map(([v,t])=>`<option value="${v}" ${v===state.paymentsSort?'selected':''}>${t}</option>`).join("")}
+      </select>
+    </div>
+    <div style="min-width:170px">
+      <label>عرض</label>
+      <select id="payments-filter-select" onchange="onPaymentsFilterChange(this.value)">
+        ${PAYMENTS_FILTER_OPTIONS.map(([v,t])=>`<option value="${v}" ${v===state.paymentsFilter?'selected':''}>${t}</option>`).join("")}
+      </select>
+    </div>
+  </div>
+  <div class="panel">
+    <div style="color:var(--muted);font-size:12px;margin-bottom:10px">اضغط أي خلية لتسجيل مبلغ، أو "لم يدفع"، أو "غير مشترك" عن ذلك الشهر. ويمكنك الضغط على عنوان عمود (الاسم، الباقة، المتراكم...) لترتيب الجدول.</div>
+    <div id="payments-summary" style="font-size:13px;margin-bottom:10px">${renderPaymentsSummary()}</div>
+    <div id="payments-grid-wrap" style="overflow-x:auto">${renderPaymentsGridOnly()}</div>
+  </div>
+  `;
+}
+
+function filteredGridCustomers(){
+  const term = (state.paymentsSearch||"").trim().toLowerCase();
+  let list = customerStatsList();
+  if(term){
+    list = list.filter(c => (c.name||"").toLowerCase().includes(term) || (c.mikrotik||"").toLowerCase().includes(term));
+  }
+  const f = state.paymentsFilter;
+  if(f==='debtors') list = list.filter(c=>c.unpaidCount>0);
+  else if(f==='late_now') list = list.filter(c=>c.lateNow);
+  else if(f==='clear') list = list.filter(c=>c.unpaidCount===0);
+
+  const [key, dir] = state.paymentsSort.split("_");
+  const mul = dir==='desc' ? -1 : 1;
+  const byName = (a,b)=> (a.name||"").localeCompare(b.name||"", 'ar');
+  list.sort((a,b)=>{
+    let r = 0;
+    if(key==='name') return mul*byName(a,b);
+    if(key==='mikrotik'){
+      // الحسابات الفارغة دائمًا في الآخر
+      if(!a.mikrotik && b.mikrotik) return 1;
+      if(a.mikrotik && !b.mikrotik) return -1;
+      r = (a.mikrotik||"").localeCompare(b.mikrotik||"", 'en', {numeric:true});
+    }
+    else if(key==='debt')   r = a.debtAmount - b.debtAmount;
+    else if(key==='months') r = a.unpaidCount - b.unpaidCount;
+    else if(key==='speed')  r = (a.speed||0) - (b.speed||0);
+    else if(key==='join')   r = (a.joinMonth||"").localeCompare(b.joinMonth||"");
+    return (mul*r) || byName(a,b);
+  });
+  return list;
+}
+
+function renderPaymentsSummary(){
+  const list = filteredGridCustomers();
+  const total = list.reduce((s,c)=>s+c.debtAmount,0);
+  const withDebt = list.filter(c=>c.unpaidCount>0).length;
+  return `<span class="pill ok">${list.length} زبون</span>
+    <span class="pill late" style="margin-right:6px">${withDebt} عليهم متأخرات</span>
+    <span style="margin-right:10px;color:var(--muted)">إجمالي المتراكم:</span>
+    <b style="color:${total>0?'var(--danger)':'var(--accent)'}">${fmtMoney(total)}</b>`;
+}
+
+function gridCellContent(row){
+  if(row.status==='paid') return `<span style="color:var(--accent);font-weight:700">${fmtMoney(row.amount)}</span>`;
+  if(row.status==='not_subscribed') return `<span style="color:var(--muted)">غ.م</span>`;
+  if(row.status==='not_due_yet') return `<span style="color:var(--muted)">—</span>`;
+  return `<span style="color:var(--danger);font-weight:700">لم يدفع</span>`;
+}
+
+function paymentsSortTh(label, key){
+  const [k,d] = state.paymentsSort.split("_");
+  const arrow = k===key ? (d==='asc' ? ' ▲' : ' ▼') : '';
+  const color = k===key ? 'color:var(--text);' : '';
+  return `<th style="cursor:pointer;user-select:none;white-space:nowrap;${color}" title="اضغط للترتيب" onclick="onPaymentsHeaderSort('${key}')">${label}${arrow}</th>`;
+}
+
+function renderPaymentsGridOnly(){
+  if(enabledCustomers().length===0) return `<div class="empty">أضف زبائن أولاً من صفحة الزبائن</div>`;
+  const list = filteredGridCustomers();
+  if(list.length===0) return `<div class="empty">لا نتائج مطابقة</div>`;
+  const pend = new Set(outbox.filter(o=>o.action==='setPaymentStatus').map(o=>o.payload.customerId+':'+o.payload.month));
+  return `
+    <table style="min-width:1100px">
+      <thead><tr>
+        ${paymentsSortTh("الاسم","name")}${paymentsSortTh("حساب المايكروتك","mikrotik")}${paymentsSortTh("الباقة","speed")}${paymentsSortTh("المتراكم","debt")}
+        ${FULL_YEAR_MONTHS.map(m=>`<th title="${m.label}">${m.abbr}</th>`).join("")}
+      </tr></thead>
+      <tbody>${list.map(c=>{
+        const debtCell = c.debtAmount>0
+          ? `<span style="color:var(--danger);font-weight:700">${fmtMoney(c.debtAmount)}</span><div style="color:var(--muted);font-size:11px">${c.unpaidCount} ${c.unpaidCount===1?'شهر':(c.unpaidCount===2?'شهران':(c.unpaidCount<=10?'أشهر':'شهرًا'))}</div>`
+          : `<span style="color:var(--accent)">مسدّد ✓</span>`;
+        return `<tr>
+          <td>${c.name}</td><td>${c.mikrotik||"—"}</td><td>${c.speed} ميغا</td><td style="white-space:nowrap">${debtCell}</td>
+          ${c.allRows.map(r=>`<td style="cursor:pointer;text-align:center;font-size:12px${pend.has(c.id+':'+r.key)?';box-shadow:inset 0 0 0 1px var(--warn)':''}" onclick='openGridCellModal(${JSON.stringify(c.id)},"${r.key}")'>${gridCellContent(r)}</td>`).join("")}
+        </tr>`;
+      }).join("")}</tbody>
+    </table>
+  `;
+}
+
+function refreshPaymentsGrid(){
+  const wrap = document.getElementById("payments-grid-wrap");
+  if(wrap) wrap.innerHTML = renderPaymentsGridOnly();
+  const sum = document.getElementById("payments-summary");
+  if(sum) sum.innerHTML = renderPaymentsSummary();
+  const sel = document.getElementById("payments-sort-select");
+  if(sel) sel.value = state.paymentsSort;
+}
+
+function onPaymentsSearchInput(value){ state.paymentsSearch = value; refreshPaymentsGrid(); }
+function onPaymentsSortChange(value){ state.paymentsSort = value; refreshPaymentsGrid(); }
+function onPaymentsFilterChange(value){ state.paymentsFilter = value; refreshPaymentsGrid(); }
+function onPaymentsHeaderSort(key){
+  const [k,d] = state.paymentsSort.split("_");
+  const defaultDir = (key==='debt' || key==='speed') ? 'desc' : 'asc';
+  state.paymentsSort = `${key}_${k===key ? (d==='asc' ? 'desc' : 'asc') : defaultDir}`;
+  refreshPaymentsGrid();
+}
+
+// ======================= GRID / PAYMENT CELL MODAL (shared by Payments grid and Statement page) =======================
+function openGridCellModal(customerId, month){
+  const c = state.customers.find(x=>x.id===customerId);
+  if(!c) return;
+  const rows = getStatementRows(c);
+  const row = rows.find(r=>r.key===month);
+  const due = priceFor(c.speed);
+  const currentStatus = row ? (row.status==='not_due_yet' ? 'unpaid' : row.status) : 'unpaid';
+  closeEditPaymentModal();
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'edit-payment-overlay';
+  overlay.innerHTML = `
+    <div class="modal-box">
+      <h3>${c.name} — ${monthLabelOf(month)}</h3>
+      <div class="form-row">
+        <div style="width:100%">
+          <label>الحالة</label>
+          <select id="gcm-status" onchange="document.getElementById('gcm-amount-wrap').style.display = this.value==='paid' ? 'block':'none'">
+            <option value="paid" ${currentStatus==='paid'?'selected':''}>مدفوع</option>
+            <option value="unpaid" ${currentStatus==='unpaid'?'selected':''}>لم يدفع</option>
+            <option value="not_subscribed" ${currentStatus==='not_subscribed'?'selected':''}>غير مشترك</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row" id="gcm-amount-wrap" style="width:100%; display:${currentStatus==='paid'?'block':'none'}">
+        <div style="width:100%">
+          <label>المبلغ (معبّى تلقائيًا من سعر باقته، يمكن تعديله)</label>
+          <input id="gcm-amount" type="number" style="width:100%" value="${row && row.status==='paid' ? row.amount : due}" />
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn" onclick='saveGridCell(${JSON.stringify(customerId)},"${month}")'>حفظ</button>
+        <button class="btn secondary" onclick="closeEditPaymentModal()">إلغاء</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+}
+function closeEditPaymentModal(){
+  const el = document.getElementById('edit-payment-overlay');
+  if(el) el.remove();
+}
+function saveGridCell(customerId, month){
+  const c = state.customers.find(x=>x.id===customerId);
+  const status = document.getElementById('gcm-status').value;
+  const amount = status==='paid' ? (Number(document.getElementById('gcm-amount').value)||0) : 0;
+  closeEditPaymentModal();
+  if(!c) return;
+  const rec = state.payments[`${customerId}:${month}`];
+  if(status==='paid' && rec && rec.status==='paid'){
+    alert(`هذا الشهر (${monthLabelOf(month)}) مسدد مسبقًا لـ ${c.name} بتاريخ ${isoToDateStr(rec.date)} بواسطة ${rec.recordedBy||"غير معروف"}. لم يتم تسجيل أي تعديل جديد.`);
+    return;
+  }
+  queueOp("setPaymentStatus", {customerId, month, status, amount, clientTime:new Date().toISOString()});
+  if(status==='paid') window.open(waLink(c.phone, buildConfirmMessage(c, monthLabelOf(month), amount)), "_blank");
+}
+
+// ======================= STATEMENT =======================
+function statusPill(status){
+  if(status==='paid') return '<span class="pill ok">مدفوع</span>';
+  if(status==='not_subscribed') return '<span class="pill">غير مشترك</span>';
+  if(status==='not_due_yet') return '<span class="pill">لم يحن موعده</span>';
+  return '<span class="pill late">لم يدفع</span>';
+}
+
+function renderStatement(){
+  if(!state.statementCustomerId && state.customers.length) state.statementCustomerId = state.customers[0].id;
+  const customer = state.customers.find(c=>c.id===state.statementCustomerId);
+  let rows = [], totalPaid=0, totalDue=0, unpaidCount=0;
+  if(customer){
+    rows = getStatementRows(customer);
+    totalPaid = rows.reduce((s,r)=>s+(r.status==='paid'?r.amount:0),0);
+    totalDue = rows.reduce((s,r)=>s+(r.status==='unpaid'?r.due:0),0);
+    unpaidCount = rows.filter(r=>r.status==='unpaid').length;
+  }
+  return `
+  <h1 class="page-title">كشف حساب الزبون</h1>
+  <div class="panel no-print">
+    <label style="display:block;font-size:12.5px;color:var(--muted);margin-bottom:6px">اختر الزبون</label>
+    <select onchange="state.statementCustomerId=this.value; render()" style="min-width:220px">
+      ${state.customers.length===0?`<option value="">لا يوجد زبائن</option>`:
+        state.customers.map(c=>`<option value="${c.id}" ${c.id===state.statementCustomerId?'selected':''}>${c.name}${c.active===false?' (معطّل)':''}</option>`).join("")}
+    </select>
+  </div>
+  ${!customer?`<div class="panel"><div class="empty">أضف زبائن أولاً من صفحة الزبائن</div></div>`:`
+  <div class="panel no-print" style="display:flex;gap:10px;flex-wrap:wrap">
+    <button class="btn" onclick="window.print()">طباعة / حفظ PDF</button>
+    <button class="btn secondary" onclick='sendStatementWA()'>إرسال عبر واتساب</button>
+    ${unpaidCount>0?`<button class="btn secondary" onclick='payAllOverdueForCustomer(${JSON.stringify(customer.id)})'>دفع كل المتأخر (${unpaidCount}) دفعة واحدة</button>`:""}
+  </div>
+  <div class="panel print-area">
+    <div class="section-heading"><h3>${customer.name}</h3><span class="count-badge">حساب المايكروتك: ${customer.mikrotik||"—"}</span></div>
+    <div style="color:var(--muted);font-size:13px;margin-bottom:14px">
+      الباقة: ${customer.speed} ميغا — ${fmtMoney(priceFor(customer.speed))} · الهاتف: ${customer.phone||"—"} · مشترك منذ: ${monthLabelOf(customer.joinMonth)}
+    </div>
+    <table><thead><tr><th>الشهر</th><th>المستحق</th><th>الحالة</th><th>تاريخ الدفع</th><th>سجّلها</th><th class="no-print"></th></tr></thead>
+    <tbody>${rows.map(r=>`<tr><td>${r.label}</td><td>${fmtMoney(r.due)}</td>
+      <td>${statusPill(r.status)}</td>
+      <td>${r.status==='paid'?isoToDateStr(r.date):"—"}</td>
+      <td>${r.status==='paid'?(r.recordedBy||"—"):"—"}</td>
+      <td class="no-print"><button class="btn secondary small" onclick='openGridCellModal(${JSON.stringify(customer.id)},"${r.key}")'>تعديل</button></td></tr>`).join("")}</tbody></table>
+    <div class="stat-grid" style="margin-top:16px;margin-bottom:0">
+      <div class="stat-card accent"><div class="label">إجمالي المدفوع</div><div class="value">${fmtMoney(totalPaid)}</div></div>
+      <div class="stat-card danger"><div class="label">إجمالي المتبقي</div><div class="value">${fmtMoney(totalDue)}</div></div>
+    </div>
+  </div>`}
+  `;
+}
+function payAllOverdueForCustomer(id){
+  const customer = state.customers.find(c=>c.id===id);
+  if(!customer) return;
+  const unpaid = getStatementRows(customer).filter(r=>r.status==='unpaid');
+  if(unpaid.length===0){ alert("لا يوجد أشهر متأخرة لهذا الزبون."); return; }
+  const total = unpaid.reduce((s,r)=>s+r.due,0);
+  if(!confirm(`رح يتسجل دفع ${unpaid.length} شهر بإجمالي ${fmtMoney(total)} لـ ${customer.name}. متأكد؟`)) return;
+  const now = new Date().toISOString();
+  unpaid.forEach(r=> queueOp("setPaymentStatus", {customerId:customer.id, month:r.key, status:'paid', amount:r.due, clientTime:now}));
+}
+function sendStatementWA(){
+  const customer = state.customers.find(c=>c.id===state.statementCustomerId);
+  if(!customer) return;
+  const rows = getStatementRows(customer);
+  const totalPaid = rows.reduce((s,r)=>s+(r.status==='paid'?r.amount:0),0);
+  const totalDue = rows.filter(r=>r.status==='unpaid').length * priceFor(customer.speed);
+  window.open(waLink(customer.phone, buildStatementMessage(customer, rows, totalPaid, totalDue)), "_blank");
+}
+
+// ======================= PRICING =======================
+let pricingDraft = null;
+function renderPricing(){
+  if(!pricingDraft) pricingDraft = {...state.pricing};
+  const speeds = Object.keys(pricingDraft).map(Number).sort((a,b)=>a-b);
+  return `
+  <h1 class="page-title">إعدادات الأسعار</h1>
+  <div class="panel">
+    <h3>الباقات الحالية</h3>
+    <table><thead><tr><th>السرعة</th><th>السعر الشهري</th><th></th></tr></thead>
+    <tbody>${speeds.map(s=>`<tr>
+      <td>${s} ميغا</td>
+      <td><input type="number" value="${pricingDraft[s]}" style="width:130px" onchange="pricingDraft[${s}]=Number(this.value)||0" /> ل.س</td>
+      <td><button class="btn danger small" onclick="removeTier(${s})">حذف</button></td>
+    </tr>`).join("")}</tbody></table>
+    <div class="form-row" style="margin-top:16px">
+      <div><label>سرعة جديدة (ميغا)</label><input id="new-speed" type="number" style="width:110px" /></div>
+      <div><label>السعر</label><input id="new-price" type="number" style="width:130px" /></div>
+      <button class="btn secondary" onclick="addTier()">إضافة باقة</button>
+    </div>
+    <div style="margin-top:16px"><button class="btn" onclick="savePricingDraft()">حفظ الأسعار</button></div>
+  </div>
+  `;
+}
+function removeTier(s){ delete pricingDraft[s]; render(); }
+function addTier(){
+  const s = Number(document.getElementById("new-speed").value);
+  const p = Number(document.getElementById("new-price").value);
+  if(!s || !p) return;
+  pricingDraft[s] = p; render();
+}
+async function savePricingDraft(){ await doSavePricing(pricingDraft); pricingDraft=null; }
+
+// ======================= INIT =======================
+(async function init(){
+  const saved = localStorage.getItem("isp_user") || sessionStorage.getItem("isp_user");
+  if(saved){
+    state.user = JSON.parse(saved);
+    if(loadCache()){
+      // نعرض البيانات المحفوظة فورًا (تعمل بدون إنترنت) ثم نزامن في الخلفية
+      outbox.forEach(applyOp);
+      render();
+      if(outbox.length) flushOutbox(); else loadAllData({silent:true});
+      return;
+    }
+    await loadAllData();
+  }
+  render();
+})();
+</script>
+</body>
+</html>
