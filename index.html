@@ -60,13 +60,11 @@ th { color:var(--muted); font-weight:500; font-size:12.5px; }
 tr:last-child td { border-bottom:none; }
 #payments-grid-wrap { max-height:75vh; overflow:auto; }
 #payments-grid-wrap thead th { position:sticky; top:0; background:var(--panel); z-index:3; box-shadow:0 1px 0 var(--border); }
-#payments-grid-wrap td.col-sticky-1, #payments-grid-wrap td.col-sticky-2,
-#payments-grid-wrap th.col-sticky-1, #payments-grid-wrap th.col-sticky-2 {
-  position:sticky; background:var(--panel); z-index:2;
+#payments-grid-wrap td.col-sticky-1, #payments-grid-wrap th.col-sticky-1 {
+  position:sticky; right:0; background:var(--panel); z-index:2; box-shadow:-1px 0 0 var(--border);
+  min-width:110px; max-width:110px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
-#payments-grid-wrap th.col-sticky-1, #payments-grid-wrap th.col-sticky-2 { z-index:4; }
-#payments-grid-wrap .col-sticky-1 { right:0; min-width:140px; max-width:140px; box-shadow:-1px 0 0 var(--border); }
-#payments-grid-wrap .col-sticky-2 { right:140px; min-width:120px; max-width:120px; box-shadow:-1px 0 0 var(--border); }
+#payments-grid-wrap th.col-sticky-1 { z-index:4; }
 .pill { display:inline-block; padding:2px 9px; border-radius:999px; font-size:12px; }
 .pill.ok { background:var(--accent-dim); color:var(--accent); }
 .pill.late { background:var(--danger-dim); color:var(--danger); }
@@ -123,6 +121,12 @@ input, select { background:var(--panel-2); border:1px solid var(--border); color
   table{ min-width:640px; width:auto; font-size:12.5px; }
   th,td{ padding:7px 8px; }
   .login-box{ width:90vw; max-width:340px; padding:24px; }
+  #payments-grid-wrap td.col-sticky-1, #payments-grid-wrap th.col-sticky-1{
+    min-width:72px; max-width:72px; padding:7px 6px; font-size:11.5px;
+  }
+  #payments-grid-wrap td.col-sticky-1 div:first-child{ font-size:11.5px; }
+  #payments-grid-wrap td.col-sticky-1 div:last-child{ font-size:10px; }
+  #payments-grid-wrap table{ min-width:760px; }
 }
 @media (max-width:420px){
   .stat-grid{ grid-template-columns:1fr; }
@@ -1029,17 +1033,19 @@ function renderPaymentsGridOnly(){
   if(enabledCustomers().length===0) return `<div class="empty">أضف زبائن أولاً من صفحة الزبائن</div>`;
   if(list.length===0) return `<div class="empty">لا نتائج مطابقة للبحث</div>`;
   return `
-    <table style="min-width:1100px; border-collapse:separate; border-spacing:0">
+    <table style="min-width:980px; border-collapse:separate; border-spacing:0">
       <thead><tr>
-        <th class="col-sticky-1">الاسم</th><th class="col-sticky-2">حساب المايكروتك</th><th>الباقة</th><th>إجمالي الدين</th>
+        <th class="col-sticky-1">الزبون</th><th>الباقة</th><th>إجمالي الدين</th>
         ${FULL_YEAR_MONTHS.map(m=>`<th title="${m.label}">${m.abbr}</th>`).join("")}
       </tr></thead>
       <tbody>${list.map(c=>{
         const rows = getStatementRows(c);
         const totals = customerTotals(c);
         return `<tr>
-          <td class="col-sticky-1">${c.name}</td>
-          <td class="col-sticky-2">${c.mikrotik||"—"}</td>
+          <td class="col-sticky-1">
+            <div style="font-weight:600">${c.name}</div>
+            <div style="color:var(--muted);font-size:11px">${c.mikrotik||"—"}</div>
+          </td>
           <td>${c.speed} ميغا</td>
           <td style="color:${totals.totalDebt>0?'var(--danger)':'var(--muted)'};font-weight:${totals.totalDebt>0?'700':'400'}">${fmtMoney(totals.totalDebt)}</td>
           ${rows.map(r=>`<td id="gridcell-${c.id}-${r.key}" style="cursor:pointer;text-align:center;font-size:12px" onclick='openGridCellModal(${JSON.stringify(c.id)},"${r.key}")'>${gridCellContent(r)}</td>`).join("")}
