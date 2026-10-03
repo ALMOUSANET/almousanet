@@ -3,6 +3,140 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<script>
+// ======================= STAGED SELF-HEALING + CRASH REPORTS =======================
+// Stage 1: hang/error → reload (no data touched)
+// Stage 2: hang/error again → clear temp cache/outbox → reload
+// Stage 3: hang/error again → clear the saved session itself (alternate storage too) → reload, login screen shows a reset notice
+// Stage 4: still failing → stop auto-reloading, show a manual-retry diagnostic screen
+// A pure connectivity problem (navigator.onLine === false) skips all wiping and goes straight to a "slow/offline" retry screen.
+// Every crash / recovery / unresolved event fires a best-effort email report via Code.gs (rate-limited server-side).
+(function(){
+  var STAGE_KEY = 'isp_recovery_stage';
+  var NOTICE_KEY = 'isp_session_reset_notice';
+  var DEVICE_KEY = 'isp_device_id';
+  var WATCHDOG_MS = 6000;
+  var watchdogTimer = null;
+  var resolved = false;
+
+  function getCookie(name){
+    var m = document.cookie.match(new RegExp('(^|; )' + name + '=([^;]*)'));
+    return m ? decodeURIComponent(m[2]) : null;
+  }
+  function setCookie(name, value, days){
+    var expires = new Date(Date.now() + days*864e5).toUTCString();
+    document.cookie = name + '=' + encodeURIComponent(value) + '; expires=' + expires + '; path=/';
+  }
+  function getDeviceId(){
+    var id = null;
+    try{ id = localStorage.getItem(DEVICE_KEY); }catch(e){}
+    if(!id){ try{ id = getCookie(DEVICE_KEY); }catch(e){} }
+    if(!id){
+      id = 'dev-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+      try{ localStorage.setItem(DEVICE_KEY, id); }catch(e){}
+      try{ setCookie(DEVICE_KEY, id, 3650); }catch(e){}
+    }
+    return id;
+  }
+  function getStage(){ var v=0; try{ v = parseInt(sessionStorage.getItem(STAGE_KEY)||'0',10)||0; }catch(e){} return v; }
+  function setStage(n){ try{ sessionStorage.setItem(STAGE_KEY, String(n)); }catch(e){} }
+
+  function sendReport(type, stage, message){
+    try{
+      var url = window.APPS_SCRIPT_URL_FOR_REPORT;
+      if(!url) return;
+      fetch(url, {
+        method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+        body: JSON.stringify({action:'reportIssue', payload:{type:type, stage:stage, device:getDeviceId(), message:String(message||'').slice(0,300)}})
+      }).catch(function(){});
+    }catch(e){}
+  }
+
+  function showScreen(title, msg, buttonLabel){
+    document.documentElement.innerHTML =
+      '<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>' +
+      '<body style="background:#10161d;color:#e7edf3;font-family:sans-serif;display:flex;align-items:center;' +
+      'justify-content:center;min-height:100vh;text-align:center;padding:20px;direction:rtl;margin:0">' +
+      '<div><h2 style="margin-bottom:10px">' + title + '</h2>' +
+      '<p style="color:#8b9bab;margin-bottom:18px;font-size:14px;max-width:320px">' + msg + '</p>' +
+      '<button onclick="location.reload()" style="background:#38c98f;color:#06231a;border:none;' +
+      'padding:10px 20px;border-radius:8px;font-weight:700;cursor:pointer;font-size:14px">' + buttonLabel + '</button></div></body>';
+  }
+
+  function handleFailure(sourceMessage){
+    if(resolved) return;
+    resolved = true;
+
+    if(navigator.onLine === false){
+      sendReport('network', getStage(), sourceMessage);
+      showScreen('ضعف أو انقطاع بالاتصال', 'تأكد من اتصالك بالإنترنت ثم أعد المحاولة. لم يتم حذف أي بيانات محفوظة.', 'إعادة المحاولة');
+      return;
+    }
+
+    var stage = getStage() + 1;
+    setStage(stage);
+    sendReport('crash', stage, sourceMessage);
+
+    if(stage === 1){
+      location.reload();
+    } else if(stage === 2){
+      try{ localStorage.removeItem('isp_cache'); }catch(e){}
+      try{ localStorage.removeItem('isp_outbox'); }catch(e){}
+      location.reload();
+    } else if(stage === 3){
+      try{ localStorage.removeItem('isp_user'); }catch(e){}
+      try{ sessionStorage.removeItem('isp_user'); }catch(e){}
+      try{ setCookie('isp_user', '', -1); }catch(e){}
+      try{ sessionStorage.setItem(NOTICE_KEY, '1'); }catch(e){}
+      location.reload();
+    } else {
+      sendReport('unresolved', stage, sourceMessage);
+      showScreen('حدث خطأ غير متوقع', 'تكرر الخطأ رغم محاولات الإصلاح التلقائي. اضغط الزر لإعادة المحاولة يدويًا، وإذا استمرت المشكلة تواصل مع المطوّر.', 'إعادة المحاولة');
+    }
+  }
+
+  watchdogTimer = setTimeout(function(){ handleFailure('watchdog-timeout'); }, WATCHDOG_MS);
+  window.addEventListener('error', function(e){ handleFailure(e && e.message); });
+  window.addEventListener('unhandledrejection', function(e){ handleFailure(e && e.reason); });
+
+  window.__ispRecoveryOK = function(){
+    if(resolved) return;
+    resolved = true;
+    if(watchdogTimer) clearTimeout(watchdogTimer);
+    var prevStage = getStage();
+    if(prevStage > 0) sendReport('recovered', prevStage, '');
+    setStage(0);
+  };
+  window.__ispConsumeResetNotice = function(){
+    var had = false;
+    try{ had = sessionStorage.getItem(NOTICE_KEY) === '1'; sessionStorage.removeItem(NOTICE_KEY); }catch(e){}
+    return had;
+  };
+  // alternate-storage-aware session helpers, used by the main app
+  window.__ispSession = {
+    get: function(){
+      try{ var v = localStorage.getItem('isp_user'); if(v) return v; }catch(e){}
+      try{ var v2 = sessionStorage.getItem('isp_user'); if(v2) return v2; }catch(e){}
+      try{ var v3 = getCookie('isp_user'); if(v3) return v3; }catch(e){}
+      return null;
+    },
+    set: function(value, persistent){
+      var ok = false;
+      try{
+        if(persistent){ localStorage.setItem('isp_user', value); } else { sessionStorage.setItem('isp_user', value); }
+        ok = true;
+      }catch(e){}
+      if(!ok){ try{ setCookie('isp_user', value, persistent?365:1); ok = true; }catch(e){} }
+      return ok;
+    },
+    clear: function(){
+      try{ localStorage.removeItem('isp_user'); }catch(e){}
+      try{ sessionStorage.removeItem('isp_user'); }catch(e){}
+      try{ setCookie('isp_user','',-1); }catch(e){}
+    }
+  };
+})();
+</script>
 <title>شبكة الموسى للإنترنيت — إدارة الزبائن والدفعات</title>
 <link rel="manifest" href="manifest.json" />
 <meta name="theme-color" content="#10161d" />
@@ -145,7 +279,8 @@ input, select { background:var(--panel-2); border:1px solid var(--border); color
 
 <script>
 // ======================= CONFIG =======================
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwQTglWdL7Zuc9R0Yh-1sbIzQBctT2aA2xhoCchu4630z5Ns2U7iQEbiBmW5sUbV-E_LA/exec";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx-skHPz0bZ28exQM-98r0j0GV0sGG30J9NxIZbQ3I_CxQiil_JxhRaMa_TiaeV2Rqfmw/exec";
+window.APPS_SCRIPT_URL_FOR_REPORT = APPS_SCRIPT_URL;
 const ARABIC_MONTHS = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
 const DEFAULT_PRICING = { 2:120000, 3:150000, 5:225000, 8:320000, 12:450000 };
 
@@ -508,13 +643,8 @@ async function submitLogin(){
   const r = await api("login", {username, password});
   if(r.ok){
     state.user = r.user;
-    if(remember){
-      localStorage.setItem("isp_user", JSON.stringify(r.user));
-      sessionStorage.removeItem("isp_user");
-    } else {
-      sessionStorage.setItem("isp_user", JSON.stringify(r.user));
-      localStorage.removeItem("isp_user");
-    }
+    window.__ispSession.clear();
+    window.__ispSession.set(JSON.stringify(r.user), remember);
     await loadAllData();
     render();
     setTimeout(maybeShowInstallPrompt, 600);
@@ -524,17 +654,18 @@ async function submitLogin(){
 }
 function logout(){
   state.user=null;
-  sessionStorage.removeItem("isp_user");
-  localStorage.removeItem("isp_user");
+  window.__ispSession.clear();
   render();
 }
 
 function renderLogin(){
+  const wasReset = window.__ispConsumeResetNotice ? window.__ispConsumeResetNotice() : false;
   return `
   <div class="login-wrap">
     <div class="login-box">
       <h1>شبكة<span style="color:var(--accent)">الموسى</span></h1>
       <p>سجّل الدخول لمتابعة الزبائن والدفعات</p>
+      ${wasReset ? `<div style="background:var(--warn-dim);color:var(--warn);font-size:12.5px;padding:8px 10px;border-radius:7px;margin-bottom:12px">أُعيد ضبط الجلسة تلقائيًا بسبب خلل متكرر. سجّل الدخول من جديد.</div>` : ""}
       <div class="err-msg" id="login-error"></div>
       <input id="login-username" placeholder="اسم المستخدم" />
       <input id="login-password" type="password" placeholder="كلمة السر" onkeydown="if(event.key==='Enter') submitLogin()" />
@@ -1276,9 +1407,15 @@ async function savePricingDraft(){ await doSavePricing(pricingDraft); pricingDra
 
 // ======================= INIT =======================
 (async function init(){
-  const saved = localStorage.getItem("isp_user") || sessionStorage.getItem("isp_user");
-  if(saved){
-    state.user = JSON.parse(saved);
+  let saved = null;
+  try{
+    saved = window.__ispSession.get();
+    if(saved) state.user = JSON.parse(saved);
+  }catch(e){
+    window.__ispSession.clear();
+    state.user = null; saved = null;
+  }
+  if(state.user){
     try{
       const lastView = localStorage.getItem('isp_last_view');
       if(lastView) state.view = lastView;
@@ -1289,6 +1426,7 @@ async function savePricingDraft(){ await doSavePricing(pricingDraft); pricingDra
     setTimeout(maybeShowInstallPrompt, 600);
   }
   render();
+  if(window.__ispRecoveryOK) window.__ispRecoveryOK();
 })();
 </script>
 </body>
