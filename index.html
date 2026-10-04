@@ -279,7 +279,7 @@ input, select { background:var(--panel-2); border:1px solid var(--border); color
 
 <script>
 // ======================= CONFIG =======================
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwQTglWdL7Zuc9R0Yh-1sbIzQBctT2aA2xhoCchu4630z5Ns2U7iQEbiBmW5sUbV-E_LA/exec";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx-skHPz0bZ28exQM-98r0j0GV0sGG30J9NxIZbQ3I_CxQiil_JxhRaMa_TiaeV2Rqfmw/exec";
 window.APPS_SCRIPT_URL_FOR_REPORT = APPS_SCRIPT_URL;
 const ARABIC_MONTHS = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
 const DEFAULT_PRICING = { 2:120000, 3:150000, 5:225000, 8:320000, 12:450000 };
@@ -298,6 +298,9 @@ let state = {
   activityLogLoading: false,
   usersList: [],
   usersLoading: false,
+  expensesList: [],
+  expensesLoading: false,
+  expensesMonth: null,
 };
 
 const months = generateMonths();
@@ -686,6 +689,7 @@ function render(){
     ["customers","الزبائن"],
     ["payments","الدفعات"],
     ["statement","كشف حساب"],
+    ["expenses","المصاريف"],
     ["activitylog","سجل النشاط"],
   ];
   if(state.user.role==="admin"){ navItems.push(["pricing","الأسعار"]); navItems.push(["users","المستخدمون"]); }
@@ -728,7 +732,12 @@ function setView(v){
     usersFetched = true;
     loadUsers();
   }
+  if(v==="expenses" && !expensesFetched){
+    expensesFetched = true;
+    loadExpenses();
+  }
 }
+let expensesFetched = false;
 
 function toggleTheme(){
   const cur = document.documentElement.getAttribute('data-theme')==='light' ? 'light' : 'dark';
@@ -753,6 +762,7 @@ function renderView(){
     case "customers": return renderCustomers();
     case "payments": return renderPayments();
     case "statement": return renderStatement();
+    case "expenses": return renderExpenses();
     case "activitylog": return renderActivityLog();
     case "users": return renderUsers();
     case "pricing": return renderPricing();
@@ -1372,6 +1382,205 @@ function sendStatementWA(){
   window.open(waLink(customer.phone, buildStatementMessage(customer, rows, totalPaid, totalDue)), "_blank");
 }
 
+// ======================= EXPENSES =======================
+const EXPENSE_CATEGORIES = ["اشتراك نت تركي","اشتراك ستارلينك","أجرة المحاسب","سحب/توزيع أرباح","أخرى"];
+const EXPENSE_RECIPIENTS = ["بيد محمد","بيد فراس","حوالة شام كاش بيد فراس","أخرى"];
+
+function todayDateStr(){
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+function fmtCurrency(amount, currency){
+  const n = (Number(amount)||0).toLocaleString("en-US");
+  return currency==="USD" ? `${n} $` : `${n} ل.س`;
+}
+
+// total actually collected this month by PAID DATE (includes old debts settled now), not by which month the payment is attributed to
+function collectedByPaidDate(monthKey){
+  let total = 0;
+  Object.values(state.payments).forEach(rec=>{
+    if(rec.status==='paid' && rec.date && rec.date.slice(0,7)===monthKey) total += (rec.amount||0);
+  });
+  return total;
+}
+
+async function loadExpenses(){
+  if(!state.expensesMonth) state.expensesMonth = currentMonthKey;
+  state.expensesLoading = true; render();
+  const r = await api("getExpenses", {month: state.expensesMonth});
+  if(r.ok) state.expensesList = r.expenses; else showToast("تعذر تحميل المصاريف: " + (r.error||""));
+  state.expensesLoading = false; render();
+}
+
+let editingExpenseId = null;
+let expenseForm = { date: todayDateStr(), category: EXPENSE_CATEGORIES[0], categoryOther:"", recipient: EXPENSE_RECIPIENTS[0], recipientOther:"", currency:"SYP", amount:"", notes:"" };
+
+function canEditExpense(e){
+  if(state.user.role==="admin") return true;
+  return e.date === todayDateStr();
+}
+
+function renderExpenses(){
+  const month = state.expensesMonth || currentMonthKey;
+  const collected = collectedByPaidDate(month);
+  const list = state.expensesList;
+
+  const totalsByCategory = {};
+  const totalsByRecipient = { "محمد": {SYP:0,USD:0}, "فراس": {SYP:0,USD:0}, "أخرى": {SYP:0,USD:0} };
+  let totalExpensesSYP = 0, totalExpensesUSD = 0;
+  list.forEach(e=>{
+    const catLabel = e.category==="أخرى" ? (e.categoryOther||"أخرى") : e.category;
+    if(!totalsByCategory[catLabel]) totalsByCategory[catLabel] = {SYP:0,USD:0};
+    totalsByCategory[catLabel][e.currency] = (totalsByCategory[catLabel][e.currency]||0) + e.amount;
+    let who = "أخرى";
+    if(e.recipient==="بيد محمد") who = "محمد";
+    else if(e.recipient==="بيد فراس" || e.recipient==="حوالة شام كاش بيد فراس") who = "فراس";
+    totalsByRecipient[who][e.currency] = (totalsByRecipient[who][e.currency]||0) + e.amount;
+    if(e.currency==="USD") totalExpensesUSD += e.amount; else totalExpensesSYP += e.amount;
+  });
+  const net = collected - totalExpensesSYP;
+
+  return `
+  <h1 class="page-title">المصاريف — ${monthLabelOf(month)}</h1>
+  <div class="form-row">
+    <div>
+      <label style="display:block;font-size:12.5px;color:var(--muted);margin-bottom:4px">الشهر</label>
+      <select onchange="state.expensesMonth=this.value; loadExpenses()">
+        ${FULL_YEAR_MONTHS.map(m=>`<option value="${m.key}" ${m.key===month?'selected':''}>${m.label}</option>`).join("")}
+      </select>
+    </div>
+  </div>
+
+  <div class="stat-grid">
+    <div class="stat-card accent"><div class="label">إجمالي المحصّل هذا الشهر</div><div class="value">${fmtMoney(collected)}</div>
+      <div class="sub">يشمل تحصيل ديون أشهر سابقة إذا دُفعت هذا الشهر</div></div>
+  </div>
+
+  <div class="panel">
+    <h3>${editingExpenseId?"تعديل حركة":"إضافة مصروف / مقبوض جديد"}</h3>
+    <div class="form-row">
+      <div><label>التاريخ</label><input id="ef-date" type="date" value="${expenseForm.date}" /></div>
+      <div><label>الفئة</label>
+        <select id="ef-category" onchange="document.getElementById('ef-category-other-wrap').style.display = this.value==='أخرى' ? 'block':'none'">
+          ${EXPENSE_CATEGORIES.map(c=>`<option value="${c}" ${c===expenseForm.category?'selected':''}>${c}</option>`).join("")}
+        </select>
+      </div>
+      <div id="ef-category-other-wrap" style="display:${expenseForm.category==='أخرى'?'block':'none'}">
+        <label>تفاصيل الفئة</label><input id="ef-category-other" value="${expenseForm.categoryOther}" />
+      </div>
+      <div><label>المستلم / طريقة التسليم</label>
+        <select id="ef-recipient" onchange="document.getElementById('ef-recipient-other-wrap').style.display = this.value==='أخرى' ? 'block':'none'">
+          ${EXPENSE_RECIPIENTS.map(r=>`<option value="${r}" ${r===expenseForm.recipient?'selected':''}>${r}</option>`).join("")}
+        </select>
+      </div>
+      <div id="ef-recipient-other-wrap" style="display:${expenseForm.recipient==='أخرى'?'block':'none'}">
+        <label>تفاصيل المستلم</label><input id="ef-recipient-other" value="${expenseForm.recipientOther}" />
+      </div>
+      <div><label>نوع القبض</label>
+        <select id="ef-currency">
+          <option value="SYP" ${expenseForm.currency==='SYP'?'selected':''}>ليرة سورية</option>
+          <option value="USD" ${expenseForm.currency==='USD'?'selected':''}>دولار</option>
+        </select>
+      </div>
+      <div><label>المبلغ</label><input id="ef-amount" type="number" value="${expenseForm.amount}" /></div>
+    </div>
+    <div class="form-row"><div style="flex:1;min-width:200px"><label>ملاحظات</label><input id="ef-notes" style="width:100%" value="${expenseForm.notes}" /></div></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn" onclick="submitExpenseForm()">${editingExpenseId?"حفظ التعديل":"إضافة"}</button>
+      ${editingExpenseId?`<button class="btn secondary" onclick="cancelEditExpense()">إلغاء</button>`:""}
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3>حركات ${monthLabelOf(month)} (${list.length})</h3>
+    ${state.expensesLoading?`<div class="empty">جارِ التحميل...</div>`:
+      list.length===0?`<div class="empty">لا توجد حركات بهذا الشهر</div>`:`
+    <table><thead><tr><th>التاريخ</th><th>الفئة</th><th>المستلم</th><th>المبلغ</th><th>ملاحظات</th><th></th></tr></thead>
+    <tbody>${list.map(e=>`<tr>
+      <td>${e.date}</td>
+      <td>${e.category==='أخرى'?(e.categoryOther||'أخرى'):e.category}</td>
+      <td>${e.recipient==='أخرى'?(e.recipientOther||'أخرى'):e.recipient}</td>
+      <td>${fmtCurrency(e.amount, e.currency)}</td>
+      <td style="color:var(--muted);font-size:12px">${e.notes||"—"}</td>
+      <td class="action-cell">
+        ${canEditExpense(e)?`<button class="btn secondary small" onclick='startEditExpense(${JSON.stringify(e.id)})'>تعديل</button>`:""}
+        ${state.user.role==="admin"?`<button class="btn danger small" onclick='deleteExpenseRow(${JSON.stringify(e.id)})'>حذف</button>`:""}
+      </td>
+    </tr>`).join("")}</tbody></table>`}
+  </div>
+
+  <div class="panel">
+    <h3>تقرير ${monthLabelOf(month)}</h3>
+    <div class="stat-grid">
+      <div class="stat-card danger"><div class="label">إجمالي المصاريف (ل.س)</div><div class="value">${fmtMoney(totalExpensesSYP)}</div></div>
+      ${totalExpensesUSD>0?`<div class="stat-card danger"><div class="label">إجمالي المصاريف ($)</div><div class="value">${totalExpensesUSD.toLocaleString("en-US")} $</div></div>`:""}
+      <div class="stat-card accent"><div class="label">الصافي (ل.س فقط)</div><div class="value">${fmtMoney(net)}</div>
+        <div class="sub">المحصّل − إجمالي المصاريف بالليرة</div></div>
+    </div>
+
+    <h3 style="margin-top:6px">حسب الفئة</h3>
+    ${Object.entries(totalsByCategory).map(([label,t])=>`
+      <div class="legend-row" style="justify-content:space-between">
+        <span>${label}</span>
+        <span>${t.SYP>0?fmtMoney(t.SYP):""}${t.SYP>0&&t.USD>0?" · ":""}${t.USD>0?t.USD.toLocaleString("en-US")+" $":""}</span>
+      </div>
+    `).join("") || `<div class="empty">لا توجد بيانات</div>`}
+
+    <h3 style="margin-top:14px">حسب المستلم</h3>
+    ${Object.entries(totalsByRecipient).filter(([,t])=>t.SYP>0||t.USD>0).map(([label,t])=>`
+      <div class="legend-row" style="justify-content:space-between">
+        <span>${label}</span>
+        <span>${t.SYP>0?fmtMoney(t.SYP):""}${t.SYP>0&&t.USD>0?" · ":""}${t.USD>0?t.USD.toLocaleString("en-US")+" $":""}</span>
+      </div>
+    `).join("") || `<div class="empty">لا توجد بيانات</div>`}
+  </div>
+  `;
+}
+
+function readExpenseForm(){
+  expenseForm = {
+    date: document.getElementById("ef-date").value || todayDateStr(),
+    category: document.getElementById("ef-category").value,
+    categoryOther: document.getElementById("ef-category-other")?.value?.trim() || "",
+    recipient: document.getElementById("ef-recipient").value,
+    recipientOther: document.getElementById("ef-recipient-other")?.value?.trim() || "",
+    currency: document.getElementById("ef-currency").value,
+    amount: Number(document.getElementById("ef-amount").value) || 0,
+    notes: document.getElementById("ef-notes").value.trim(),
+  };
+}
+async function submitExpenseForm(){
+  readExpenseForm();
+  if(!expenseForm.amount || expenseForm.amount<=0){ alert("أدخل مبلغًا صحيحًا"); return; }
+  if(editingExpenseId){
+    const r = await api("editExpense", {id:editingExpenseId, patch:expenseForm});
+    if(!r.ok){ alert(r.error); return; }
+    editingExpenseId = null;
+  } else {
+    const r = await api("addExpense", expenseForm);
+    if(!r.ok){ alert(r.error); return; }
+  }
+  expenseForm = { date: todayDateStr(), category: EXPENSE_CATEGORIES[0], categoryOther:"", recipient: EXPENSE_RECIPIENTS[0], recipientOther:"", currency:"SYP", amount:"", notes:"" };
+  await loadExpenses();
+}
+function startEditExpense(id){
+  const e = state.expensesList.find(x=>x.id===id);
+  if(!e || !canEditExpense(e)) return;
+  editingExpenseId = id;
+  expenseForm = { date:e.date, category:e.category, categoryOther:e.categoryOther||"", recipient:e.recipient, recipientOther:e.recipientOther||"", currency:e.currency, amount:e.amount, notes:e.notes||"" };
+  render();
+}
+function cancelEditExpense(){
+  editingExpenseId = null;
+  expenseForm = { date: todayDateStr(), category: EXPENSE_CATEGORIES[0], categoryOther:"", recipient: EXPENSE_RECIPIENTS[0], recipientOther:"", currency:"SYP", amount:"", notes:"" };
+  render();
+}
+async function deleteExpenseRow(id){
+  if(!confirm("حذف هذه الحركة نهائيًا؟")) return;
+  const r = await api("deleteExpense", {id});
+  if(r.ok) await loadExpenses(); else alert(r.error);
+}
+
 // ======================= PRICING =======================
 let pricingDraft = null;
 function renderPricing(){
@@ -1423,6 +1632,7 @@ async function savePricingDraft(){ await doSavePricing(pricingDraft); pricingDra
     await loadAllData();
     if(state.view==="activitylog"){ activityLogFetched = true; loadActivityLog(); }
     if(state.view==="users"){ usersFetched = true; loadUsers(); }
+    if(state.view==="expenses"){ expensesFetched = true; loadExpenses(); }
     setTimeout(maybeShowInstallPrompt, 600);
   }
   render();
