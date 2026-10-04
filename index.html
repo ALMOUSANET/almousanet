@@ -279,7 +279,7 @@ input, select { background:var(--panel-2); border:1px solid var(--border); color
 
 <script>
 // ======================= CONFIG =======================
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx-skHPz0bZ28exQM-98r0j0GV0sGG30J9NxIZbQ3I_CxQiil_JxhRaMa_TiaeV2Rqfmw/exec";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwQTglWdL7Zuc9R0Yh-1sbIzQBctT2aA2xhoCchu4630z5Ns2U7iQEbiBmW5sUbV-E_LA/exec";
 window.APPS_SCRIPT_URL_FOR_REPORT = APPS_SCRIPT_URL;
 const ARABIC_MONTHS = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
 const DEFAULT_PRICING = { 2:120000, 3:150000, 5:225000, 8:320000, 12:450000 };
@@ -1382,101 +1382,195 @@ function sendStatementWA(){
   window.open(waLink(customer.phone, buildStatementMessage(customer, rows, totalPaid, totalDue)), "_blank");
 }
 
-// ======================= EXPENSES =======================
-const EXPENSE_CATEGORIES = ["اشتراك نت تركي","اشتراك ستارلينك","أجرة المحاسب","سحب/توزيع أرباح","أخرى"];
-const EXPENSE_RECIPIENTS = ["بيد محمد","بيد فراس","حوالة شام كاش بيد فراس","أخرى"];
+// ======================= EXPENSES / CASH BOX =======================
+const OPENING_CATEGORY = "رصيد افتتاحي";
+const EXPENSE_CATEGORIES = {
+  out: ["اشتراك نت تركي","اشتراك ستارلينك","أجرة المحاسب","سحب/توزيع أرباح","أخرى"],
+  in:  [OPENING_CATEGORY,"إيداع من فراس","إيراد آخر","أخرى"],
+};
+const EXPENSE_PARTIES = {
+  out: ["بيد محمد","بيد فراس","حوالة شام كاش بيد فراس","أخرى"],
+  in:  ["بيد فراس","بيد محمد","حوالة شام كاش","أخرى"],
+};
 
 function todayDateStr(){
   const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+function localDateStr(iso){
+  const d = new Date(iso);
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 }
 function fmtCurrency(amount, currency){
   const n = (Number(amount)||0).toLocaleString("en-US");
   return currency==="USD" ? `${n} $` : `${n} ل.س`;
 }
+function catLabel(e){ return e.category==="أخرى" ? (e.categoryOther||"أخرى") : e.category; }
+function partyLabel(e){ return e.recipient==="أخرى" ? (e.recipientOther||"أخرى") : e.recipient; }
+function sumExp(arr, cur){ return arr.filter(e=>e.currency===cur).reduce((s,e)=>s+e.amount,0); }
 
-// total actually collected this month by PAID DATE (includes old debts settled now), not by which month the payment is attributed to
+// total actually collected in a month by PAID DATE (includes old debts settled now)
 function collectedByPaidDate(monthKey){
   let total = 0;
   Object.values(state.payments).forEach(rec=>{
-    if(rec.status==='paid' && rec.date && rec.date.slice(0,7)===monthKey) total += (rec.amount||0);
+    if(rec.status==='paid' && rec.date && localDateStr(rec.date).slice(0,7)===monthKey) total += (rec.amount||0);
   });
   return total;
+}
+
+// Cumulative cash box held by the accountant.
+// Starts at the date of the earliest "opening balance" entry. Subscriber collections count as inflow (SYP) from that date on.
+// Old imported payments have no paid date, so they are excluded automatically.
+function cashBoxData(){
+  const all = state.expensesList;
+  const openings = all.filter(e=>e.type==='in' && e.category===OPENING_CATEGORY);
+  const cutoff = openings.length ? openings.map(e=>e.date).sort()[0] : "";
+  const inRange = e => !cutoff || e.date >= cutoff;
+  const otherIn = all.filter(e=>e.type==='in' && e.category!==OPENING_CATEGORY && inRange(e));
+  const outs = all.filter(e=>e.type!=='in' && inRange(e));
+  let collections = 0;
+  Object.values(state.payments).forEach(rec=>{
+    if(rec.status==='paid' && rec.date){
+      const d = localDateStr(rec.date);
+      if(!cutoff || d >= cutoff) collections += (rec.amount||0);
+    }
+  });
+  const opening = { SYP: sumExp(openings,'SYP'), USD: sumExp(openings,'USD') };
+  const inOther = { SYP: sumExp(otherIn,'SYP'), USD: sumExp(otherIn,'USD') };
+  const out = { SYP: sumExp(outs,'SYP'), USD: sumExp(outs,'USD') };
+  return {
+    hasOpening: openings.length>0, cutoff, collections, opening, inOther, out,
+    syp: opening.SYP + collections + inOther.SYP - out.SYP,
+    usd: opening.USD + inOther.USD - out.USD,
+    hasUSD: all.some(e=>e.currency==='USD'),
+  };
 }
 
 async function loadExpenses(){
   if(!state.expensesMonth) state.expensesMonth = currentMonthKey;
   state.expensesLoading = true; render();
-  const r = await api("getExpenses", {month: state.expensesMonth});
+  const r = await api("getExpenses", {});
   if(r.ok) state.expensesList = r.expenses; else showToast("تعذر تحميل المصاريف: " + (r.error||""));
   state.expensesLoading = false; render();
 }
 
+function blankExpenseForm(type){
+  type = type || "out";
+  return { type, date: todayDateStr(), category: EXPENSE_CATEGORIES[type][0], categoryOther:"", recipient: EXPENSE_PARTIES[type][0], recipientOther:"", currency:"SYP", amount:"", notes:"" };
+}
 let editingExpenseId = null;
-let expenseForm = { date: todayDateStr(), category: EXPENSE_CATEGORIES[0], categoryOther:"", recipient: EXPENSE_RECIPIENTS[0], recipientOther:"", currency:"SYP", amount:"", notes:"" };
+let expenseForm = blankExpenseForm("out");
 
 function canEditExpense(e){
   if(state.user.role==="admin") return true;
   return e.date === todayDateStr();
 }
 
+function groupTotals(arr, labelFn){
+  const g = {};
+  arr.forEach(e=>{
+    const k = labelFn(e);
+    if(!g[k]) g[k] = {SYP:0,USD:0};
+    g[k][e.currency] += e.amount;
+  });
+  return g;
+}
+function totalsRows(g){
+  const entries = Object.entries(g);
+  if(!entries.length) return `<div class="empty">لا توجد بيانات</div>`;
+  return entries.map(([label,t])=>`
+    <div class="legend-row" style="justify-content:space-between">
+      <span>${label}</span>
+      <span>${t.SYP>0?fmtMoney(t.SYP):""}${t.SYP>0&&t.USD>0?" · ":""}${t.USD>0?t.USD.toLocaleString("en-US")+" $":""}</span>
+    </div>`).join("");
+}
+
 function renderExpenses(){
   const month = state.expensesMonth || currentMonthKey;
+  const all = state.expensesList;
+  const list = all.filter(e=>(e.date||"").slice(0,7)===month).sort((a,b)=>b.date.localeCompare(a.date));
+  const box = cashBoxData();
   const collected = collectedByPaidDate(month);
-  const list = state.expensesList;
 
-  const totalsByCategory = {};
-  const totalsByRecipient = { "محمد": {SYP:0,USD:0}, "فراس": {SYP:0,USD:0}, "أخرى": {SYP:0,USD:0} };
-  let totalExpensesSYP = 0, totalExpensesUSD = 0;
-  list.forEach(e=>{
-    const catLabel = e.category==="أخرى" ? (e.categoryOther||"أخرى") : e.category;
-    if(!totalsByCategory[catLabel]) totalsByCategory[catLabel] = {SYP:0,USD:0};
-    totalsByCategory[catLabel][e.currency] = (totalsByCategory[catLabel][e.currency]||0) + e.amount;
+  const outs = list.filter(e=>e.type!=='in');
+  const ins = list.filter(e=>e.type==='in' && e.category!==OPENING_CATEGORY);
+  const outSYP = sumExp(outs,'SYP'), outUSD = sumExp(outs,'USD');
+  const inSYP = sumExp(ins,'SYP'), inUSD = sumExp(ins,'USD');
+  const monthNet = collected + inSYP - outSYP;
+
+  const recipientGroups = {};
+  outs.forEach(e=>{
     let who = "أخرى";
     if(e.recipient==="بيد محمد") who = "محمد";
     else if(e.recipient==="بيد فراس" || e.recipient==="حوالة شام كاش بيد فراس") who = "فراس";
-    totalsByRecipient[who][e.currency] = (totalsByRecipient[who][e.currency]||0) + e.amount;
-    if(e.currency==="USD") totalExpensesUSD += e.amount; else totalExpensesSYP += e.amount;
+    if(!recipientGroups[who]) recipientGroups[who] = {SYP:0,USD:0};
+    recipientGroups[who][e.currency] += e.amount;
   });
-  const net = collected - totalExpensesSYP;
+
+  const t = expenseForm.type;
+  const partyLabelText = t==='in' ? "المصدر" : "المستلم / طريقة التسليم";
 
   return `
-  <h1 class="page-title">المصاريف — ${monthLabelOf(month)}</h1>
+  <h1 class="page-title">المصاريف والصندوق</h1>
+
+  <div class="panel" style="border-color:var(--accent)">
+    <div class="section-heading">
+      <h3>رصيد الصندوق عند المحاسب</h3>
+      <span class="count-badge">${box.hasOpening ? "يُحسب من تاريخ "+box.cutoff : "لم يُسجَّل رصيد افتتاحي بعد"}</span>
+    </div>
+    <div class="stat-grid" style="margin-bottom:8px">
+      <div class="stat-card ${box.syp>=0?'accent':'danger'}"><div class="label">بالليرة السورية</div><div class="value">${fmtMoney(box.syp)}</div></div>
+      ${(box.hasUSD || box.usd!==0) ? `<div class="stat-card ${box.usd>=0?'accent':'danger'}"><div class="label">بالدولار</div><div class="value">${box.usd.toLocaleString("en-US")} $</div></div>` : ""}
+    </div>
+    <div style="color:var(--muted);font-size:12px;line-height:1.9">
+      ل.س: رصيد افتتاحي ${fmtMoney(box.opening.SYP)} + تحصيل المشتركين ${fmtMoney(box.collections)} + واردات أخرى ${fmtMoney(box.inOther.SYP)} − مدفوعات ${fmtMoney(box.out.SYP)}
+      ${(box.hasUSD || box.usd!==0) ? `<br/>$: رصيد افتتاحي ${box.opening.USD.toLocaleString("en-US")} + واردات أخرى ${box.inOther.USD.toLocaleString("en-US")} − مدفوعات ${box.out.USD.toLocaleString("en-US")}` : ""}
+    </div>
+    ${!box.hasOpening ? `<div style="background:var(--warn-dim);color:var(--warn);font-size:12.5px;padding:8px 10px;border-radius:7px;margin-top:10px">
+      أضف حركة <b>واردات</b> بفئة <b>رصيد افتتاحي</b> بما هو موجود فعلاً بيد المحاسب الآن، فيبدأ حساب الصندوق منها. التحصيل يُحسب من تاريخ هذه الحركة فصاعدًا، فسجّلها قبل تسجيل دفعات ذلك اليوم.</div>` : ""}
+  </div>
+
   <div class="form-row">
     <div>
-      <label style="display:block;font-size:12.5px;color:var(--muted);margin-bottom:4px">الشهر</label>
-      <select onchange="state.expensesMonth=this.value; loadExpenses()">
+      <label style="display:block;font-size:12.5px;color:var(--muted);margin-bottom:4px">الشهر المعروض بالجدول والتقرير</label>
+      <select onchange="state.expensesMonth=this.value; render()">
         ${FULL_YEAR_MONTHS.map(m=>`<option value="${m.key}" ${m.key===month?'selected':''}>${m.label}</option>`).join("")}
       </select>
     </div>
   </div>
 
   <div class="stat-grid">
-    <div class="stat-card accent"><div class="label">إجمالي المحصّل هذا الشهر</div><div class="value">${fmtMoney(collected)}</div>
+    <div class="stat-card accent"><div class="label">إجمالي المحصّل من المشتركين في ${monthLabelOf(month)}</div><div class="value">${fmtMoney(collected)}</div>
       <div class="sub">يشمل تحصيل ديون أشهر سابقة إذا دُفعت هذا الشهر</div></div>
   </div>
 
   <div class="panel">
-    <h3>${editingExpenseId?"تعديل حركة":"إضافة مصروف / مقبوض جديد"}</h3>
+    <h3>${editingExpenseId?"تعديل حركة":"إضافة حركة جديدة"}</h3>
     <div class="form-row">
+      <div><label>نوع الحركة</label>
+        <select id="ef-type" onchange="onExpenseTypeChange(this.value)">
+          <option value="out" ${t==='out'?'selected':''}>🔴 مدفوعات (صادر من الصندوق)</option>
+          <option value="in" ${t==='in'?'selected':''}>🟢 واردات (داخل للصندوق)</option>
+        </select>
+      </div>
       <div><label>التاريخ</label><input id="ef-date" type="date" value="${expenseForm.date}" /></div>
       <div><label>الفئة</label>
         <select id="ef-category" onchange="document.getElementById('ef-category-other-wrap').style.display = this.value==='أخرى' ? 'block':'none'">
-          ${EXPENSE_CATEGORIES.map(c=>`<option value="${c}" ${c===expenseForm.category?'selected':''}>${c}</option>`).join("")}
+          ${EXPENSE_CATEGORIES[t].map(c=>`<option value="${c}" ${c===expenseForm.category?'selected':''}>${c}</option>`).join("")}
         </select>
       </div>
       <div id="ef-category-other-wrap" style="display:${expenseForm.category==='أخرى'?'block':'none'}">
         <label>تفاصيل الفئة</label><input id="ef-category-other" value="${expenseForm.categoryOther}" />
       </div>
-      <div><label>المستلم / طريقة التسليم</label>
+      <div><label>${partyLabelText}</label>
         <select id="ef-recipient" onchange="document.getElementById('ef-recipient-other-wrap').style.display = this.value==='أخرى' ? 'block':'none'">
-          ${EXPENSE_RECIPIENTS.map(r=>`<option value="${r}" ${r===expenseForm.recipient?'selected':''}>${r}</option>`).join("")}
+          ${EXPENSE_PARTIES[t].map(r=>`<option value="${r}" ${r===expenseForm.recipient?'selected':''}>${r}</option>`).join("")}
         </select>
       </div>
       <div id="ef-recipient-other-wrap" style="display:${expenseForm.recipient==='أخرى'?'block':'none'}">
-        <label>تفاصيل المستلم</label><input id="ef-recipient-other" value="${expenseForm.recipientOther}" />
+        <label>تفاصيل ${t==='in'?'المصدر':'المستلم'}</label><input id="ef-recipient-other" value="${expenseForm.recipientOther}" />
       </div>
-      <div><label>نوع القبض</label>
+      <div><label>العملة</label>
         <select id="ef-currency">
           <option value="SYP" ${expenseForm.currency==='SYP'?'selected':''}>ليرة سورية</option>
           <option value="USD" ${expenseForm.currency==='USD'?'selected':''}>دولار</option>
@@ -1495,12 +1589,13 @@ function renderExpenses(){
     <h3>حركات ${monthLabelOf(month)} (${list.length})</h3>
     ${state.expensesLoading?`<div class="empty">جارِ التحميل...</div>`:
       list.length===0?`<div class="empty">لا توجد حركات بهذا الشهر</div>`:`
-    <table><thead><tr><th>التاريخ</th><th>الفئة</th><th>المستلم</th><th>المبلغ</th><th>ملاحظات</th><th></th></tr></thead>
+    <table><thead><tr><th>التاريخ</th><th>النوع</th><th>الفئة</th><th>المستلم / المصدر</th><th>المبلغ</th><th>ملاحظات</th><th></th></tr></thead>
     <tbody>${list.map(e=>`<tr>
       <td>${e.date}</td>
-      <td>${e.category==='أخرى'?(e.categoryOther||'أخرى'):e.category}</td>
-      <td>${e.recipient==='أخرى'?(e.recipientOther||'أخرى'):e.recipient}</td>
-      <td>${fmtCurrency(e.amount, e.currency)}</td>
+      <td><span class="pill ${e.type==='in'?'ok':'late'}">${e.type==='in'?'وارد':'صادر'}</span></td>
+      <td>${catLabel(e)}</td>
+      <td>${partyLabel(e)}</td>
+      <td style="color:${e.type==='in'?'var(--accent)':'var(--danger)'};font-weight:600">${e.type==='in'?'+':'−'} ${fmtCurrency(e.amount, e.currency)}</td>
       <td style="color:var(--muted);font-size:12px">${e.notes||"—"}</td>
       <td class="action-cell">
         ${canEditExpense(e)?`<button class="btn secondary small" onclick='startEditExpense(${JSON.stringify(e.id)})'>تعديل</button>`:""}
@@ -1512,33 +1607,29 @@ function renderExpenses(){
   <div class="panel">
     <h3>تقرير ${monthLabelOf(month)}</h3>
     <div class="stat-grid">
-      <div class="stat-card danger"><div class="label">إجمالي المصاريف (ل.س)</div><div class="value">${fmtMoney(totalExpensesSYP)}</div></div>
-      ${totalExpensesUSD>0?`<div class="stat-card danger"><div class="label">إجمالي المصاريف ($)</div><div class="value">${totalExpensesUSD.toLocaleString("en-US")} $</div></div>`:""}
-      <div class="stat-card accent"><div class="label">الصافي (ل.س فقط)</div><div class="value">${fmtMoney(net)}</div>
-        <div class="sub">المحصّل − إجمالي المصاريف بالليرة</div></div>
+      <div class="stat-card danger"><div class="label">إجمالي المدفوعات (ل.س)</div><div class="value">${fmtMoney(outSYP)}</div></div>
+      ${outUSD>0?`<div class="stat-card danger"><div class="label">إجمالي المدفوعات ($)</div><div class="value">${outUSD.toLocaleString("en-US")} $</div></div>`:""}
+      <div class="stat-card accent"><div class="label">إجمالي الواردات الخارجية (ل.س)</div><div class="value">${fmtMoney(inSYP)}</div><div class="sub">لا يشمل الرصيد الافتتاحي ولا تحصيل المشتركين</div></div>
+      ${inUSD>0?`<div class="stat-card accent"><div class="label">إجمالي الواردات الخارجية ($)</div><div class="value">${inUSD.toLocaleString("en-US")} $</div></div>`:""}
+      <div class="stat-card ${monthNet>=0?'accent':'danger'}"><div class="label">صافي حركة الشهر (ل.س)</div><div class="value">${fmtMoney(monthNet)}</div>
+        <div class="sub">تحصيل المشتركين + واردات أخرى − مدفوعات</div></div>
     </div>
 
-    <h3 style="margin-top:6px">حسب الفئة</h3>
-    ${Object.entries(totalsByCategory).map(([label,t])=>`
-      <div class="legend-row" style="justify-content:space-between">
-        <span>${label}</span>
-        <span>${t.SYP>0?fmtMoney(t.SYP):""}${t.SYP>0&&t.USD>0?" · ":""}${t.USD>0?t.USD.toLocaleString("en-US")+" $":""}</span>
-      </div>
-    `).join("") || `<div class="empty">لا توجد بيانات</div>`}
+    <h3 style="margin-top:6px">المدفوعات حسب الفئة</h3>
+    ${totalsRows(groupTotals(outs, catLabel))}
 
-    <h3 style="margin-top:14px">حسب المستلم</h3>
-    ${Object.entries(totalsByRecipient).filter(([,t])=>t.SYP>0||t.USD>0).map(([label,t])=>`
-      <div class="legend-row" style="justify-content:space-between">
-        <span>${label}</span>
-        <span>${t.SYP>0?fmtMoney(t.SYP):""}${t.SYP>0&&t.USD>0?" · ":""}${t.USD>0?t.USD.toLocaleString("en-US")+" $":""}</span>
-      </div>
-    `).join("") || `<div class="empty">لا توجد بيانات</div>`}
+    <h3 style="margin-top:14px">المدفوعات حسب المستلم</h3>
+    ${totalsRows(recipientGroups)}
+
+    <h3 style="margin-top:14px">الواردات الخارجية حسب الفئة</h3>
+    ${totalsRows(groupTotals(ins, catLabel))}
   </div>
   `;
 }
 
 function readExpenseForm(){
   expenseForm = {
+    type: document.getElementById("ef-type").value,
     date: document.getElementById("ef-date").value || todayDateStr(),
     category: document.getElementById("ef-category").value,
     categoryOther: document.getElementById("ef-category-other")?.value?.trim() || "",
@@ -1549,9 +1640,19 @@ function readExpenseForm(){
     notes: document.getElementById("ef-notes").value.trim(),
   };
 }
+function onExpenseTypeChange(newType){
+  readExpenseForm();
+  expenseForm.type = newType;
+  expenseForm.category = EXPENSE_CATEGORIES[newType][0];
+  expenseForm.categoryOther = "";
+  expenseForm.recipient = EXPENSE_PARTIES[newType][0];
+  expenseForm.recipientOther = "";
+  render();
+}
 async function submitExpenseForm(){
   readExpenseForm();
   if(!expenseForm.amount || expenseForm.amount<=0){ alert("أدخل مبلغًا صحيحًا"); return; }
+  const keepType = expenseForm.type;
   if(editingExpenseId){
     const r = await api("editExpense", {id:editingExpenseId, patch:expenseForm});
     if(!r.ok){ alert(r.error); return; }
@@ -1560,19 +1661,20 @@ async function submitExpenseForm(){
     const r = await api("addExpense", expenseForm);
     if(!r.ok){ alert(r.error); return; }
   }
-  expenseForm = { date: todayDateStr(), category: EXPENSE_CATEGORIES[0], categoryOther:"", recipient: EXPENSE_RECIPIENTS[0], recipientOther:"", currency:"SYP", amount:"", notes:"" };
+  expenseForm = blankExpenseForm(keepType);
   await loadExpenses();
 }
 function startEditExpense(id){
   const e = state.expensesList.find(x=>x.id===id);
   if(!e || !canEditExpense(e)) return;
   editingExpenseId = id;
-  expenseForm = { date:e.date, category:e.category, categoryOther:e.categoryOther||"", recipient:e.recipient, recipientOther:e.recipientOther||"", currency:e.currency, amount:e.amount, notes:e.notes||"" };
+  expenseForm = { type:e.type, date:e.date, category:e.category, categoryOther:e.categoryOther||"", recipient:e.recipient, recipientOther:e.recipientOther||"", currency:e.currency, amount:e.amount, notes:e.notes||"" };
   render();
+  setTimeout(()=>{ const el = document.getElementById('ef-amount'); if(el) el.scrollIntoView({behavior:'smooth', block:'center'}); }, 50);
 }
 function cancelEditExpense(){
   editingExpenseId = null;
-  expenseForm = { date: todayDateStr(), category: EXPENSE_CATEGORIES[0], categoryOther:"", recipient: EXPENSE_RECIPIENTS[0], recipientOther:"", currency:"SYP", amount:"", notes:"" };
+  expenseForm = blankExpenseForm(expenseForm.type);
   render();
 }
 async function deleteExpenseRow(id){
