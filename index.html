@@ -452,6 +452,10 @@ function handleAuthExpired(){
 }
 
 // ======================= TOAST =======================
+function hideToast(){
+  const old = document.getElementById('isp-toast');
+  if(old) old.remove();
+}
 function showToast(msg, ms=2200){
   const old = document.getElementById('isp-toast');
   if(old) old.remove();
@@ -880,10 +884,17 @@ async function resetUserPassword(id){
   const r = await api("resetUserPassword", {id, newPassword:pw});
   if(r.ok) showToast("تم تغيير كلمة السر ✓"); else alert(r.error);
 }
+async function fixStructureClick(){
+  showToast("جارِ فحص الشيت...", 60000);
+  const r = await api("fixStructure", {});
+  hideToast();
+  if(!r.ok){ alert(r.error || "تعذر الفحص"); return; }
+  alert(r.report.length ? "تم الإصلاح:\n• " + r.report.join("\n• ") : "هيكل الشيت سليم، لا يوجد ما يُصلح ✓");
+}
 async function backupNowClick(){
   showToast("جارِ إنشاء النسخة الاحتياطية...", 60000);
   const r = await api("backupNow", {});
-  if(r.ok){ showToast("تم: " + r.name); await loadUsers(); } else { showToast(""); alert(r.error || "تعذر إنشاء النسخة"); }
+  if(r.ok){ showToast("تم: " + r.name); await loadUsers(); } else { hideToast(); alert(r.error || "تعذر إنشاء النسخة"); }
 }
 async function deleteUserRow(id){
   if(!confirm("حذف هذا المستخدم نهائيًا؟")) return;
@@ -912,6 +923,11 @@ function renderUsers(){
     <h3>النسخ الاحتياطي</h3>
     <div style="font-size:13px;color:var(--muted);margin-bottom:8px">${state.lastBackup ? `آخر نسخة: ${state.lastBackup.slice(0,16).replace("T"," ")} — ${escAttr(state.lastBackupName||"")}` : "لا توجد نسخة بعد. شغّل الدالة setupAll من محرر Apps Script مرة واحدة."}</div>
     <button class="btn secondary" onclick="backupNowClick()">نسخ احتياطي الآن</button>
+  </div>
+  <div class="panel">
+    <h3>هيكل الشيت</h3>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:8px">يضيف أي عمود أو صفحة ناقصة (Box وRate وReceivedBy وCashCounts وغيرها) ويعبّئ القيم الافتراضية للصفوف القديمة. يضيف فقط، ولا يحذف ولا يغيّر أي قيمة موجودة. يعمل أيضًا تلقائيًا أول دخول بعد كل تحديث.</div>
+    <button class="btn secondary" onclick="fixStructureClick()">فحص هيكل الشيت وإصلاحه</button>
   </div>
   <div class="panel">
     <h3>المستخدمون الحاليون</h3>
