@@ -305,6 +305,11 @@ let state = {
   expensesList: [],
   expensesLoading: false,
   expensesMonth: null,
+  expensesServer: [],
+  expensesLoaded: false,
+  expensesStale: false,
+  expensesLastOk: 0,
+  expensesLoadError: "",
   cashCounts: [],
   cashCountsError: "",
   lastBackup: "",
@@ -476,28 +481,181 @@ function loadCache(){
 }
 function getOutbox(){ try{ return JSON.parse(localStorage.getItem('isp_outbox')||'[]'); }catch(e){ return []; } }
 function setOutbox(arr){ try{ localStorage.setItem('isp_outbox', JSON.stringify(arr)); }catch(e){} }
+function newQid(){ return "q" + Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+function newClientId(){ return "c-" + Math.random().toString(36).slice(2,10) + Date.now().toString(36); }
+// every queued change remembers WHO made it: it is only ever sent under that same user's login,
+// so "recorded by" in the sheet and in the activity log stays truthful
 function queueOutbox(action, payload){
   const q = getOutbox();
-  q.push({action, payload});
+  q.push({ qid:newQid(), action, payload, ts:Date.now(), by: state.user ? state.user.username : "" });
   setOutbox(q);
 }
+function removeFromOutbox(qid){ setOutbox(getOutbox().filter(x=>x.qid!==qid)); }
+function getRejected(){ try{ return JSON.parse(localStorage.getItem('isp_outbox_rejected')||'[]'); }catch(e){ return []; } }
+function setRejected(arr){ try{ localStorage.setItem('isp_outbox_rejected', JSON.stringify(arr)); }catch(e){} }
+function isMine(item){ return !item.by || !state.user || item.by===state.user.username; }
+
+let outboxSyncing = false;
+// Sends queued changes one by one, oldest first.
+//  - no connection / session expired  -> keep EVERYTHING and try again later (nothing is lost)
+//  - accepted                          -> removed
+//  - refused by the server             -> moved to the "needs review" list, never dropped silently
 async function trySyncOutbox(){
-  let q = getOutbox();
-  if(q.length===0) return;
-  const remaining = [];
-  let syncedAny = false;
-  for(const item of q){
-    const res = await api(item.action, item.payload);
-    if(res.networkError){ remaining.push(item); }
-    else { syncedAny = true; }
-  }
-  setOutbox(remaining);
-  if(syncedAny){
-    showToast(`تمت مزامنة ${q.length - remaining.length} تغيير معلّق ✓`);
-    await loadAllData();
+  if(outboxSyncing || !state.user || !state.user.token) return;
+  outboxSyncing = true;
+  let done = 0, rejected = 0, finOps = false;
+  try{
+    while(state.user && state.user.token){
+      const q = getOutbox();
+      let touched = false;
+      q.forEach(it=>{ if(!it.qid){ it.qid = newQid(); touched = true; } });
+      if(touched) setOutbox(q);
+      const item = q.find(isMine);
+      if(!item) break;
+      const res = await api(item.action, item.payload);
+      if(res.networkError || res.authError) break;
+      removeFromOutbox(item.qid);                       // progress is saved after EVERY item
+      if(res.ok || res.alreadyPaid){
+        done++;
+        if(item.action==="addExpense" || item.action==="editExpense") finOps = true;
+      } else {
+        const rej = getRejected();
+        rej.push({ action:item.action, payload:item.payload, by:item.by||"", error:res.error || "رفض الخادم العملية", ts:Date.now() });
+        setRejected(rej);
+        rejected++;
+        if(item.action==="addExpense" || item.action==="editExpense") finOps = true;
+      }
+    }
+  } finally { outboxSyncing = false; }
+  if(done) showToast(`تمت مزامنة ${done} تغيير معلّق ✓`);
+  if(rejected) showToast(`${rejected} تغيير رفضه الخادم — اضغط التنبيه أعلى الصفحة لمراجعته`, 6000);
+  if(done || rejected){
+    rebuildExpensesFromOutbox();
+    await loadAllData(true);
+    if(finOps || state.view==="expenses") await loadExpenses(true);
   }
 }
-window.addEventListener('online', trySyncOutbox);
+window.addEventListener('online', ()=>{
+  trySyncOutbox();
+  if(state.user && state.view==="expenses" && state.expensesStale) loadExpenses(true);
+});
+
+// ---- readable description of a queued / refused change ----
+function describeOp(item){
+  const p = item.payload || {};
+  const cust = id => (state.customers.find(c=>c.id===id)||{}).name || "";
+  switch(item.action){
+    case "setPaymentStatus": return `دفعة ${cust(p.customerId)} — ${monthLabelOf(p.month)}`;
+    case "editCustomer": return `تعديل بيانات ${cust(p.id)}`;
+    case "saveReminder": return `${p.kind==="reminder" ? "تذكير" : "وعد بالدفع"} — ${cust(p.id)}`;
+    case "addExpense": return `حركة صندوق: ${p.category||""} ${fmtCurrency(p.amount, p.currency)} (${p.date||""})`;
+    case "editExpense": return "تعديل حركة صندوق";
+    default: return item.action;
+  }
+}
+function openRejectedModal(){
+  const list = getRejected();
+  closeRejectedModal();
+  if(!list.length) return;
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.id = "rejected-overlay";
+  overlay.innerHTML = `
+    <div class="modal-box stack-form" style="max-width:520px;max-height:90vh;overflow-y:auto">
+      <h3>تغييرات رفضها الخادم (${list.length})</h3>
+      <div style="color:var(--muted);font-size:12.5px;margin-bottom:10px">لم تُحفظ هذه التغييرات. أصلح السبب ثم أعد المحاولة، أو احذفها إن لم تعد مطلوبة.</div>
+      ${list.map((it,i)=>`
+        <div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px">
+          <div style="font-weight:600;font-size:13.5px">${escAttr(describeOp(it))}</div>
+          <div style="color:var(--danger);font-size:12.5px;margin:4px 0 8px">${escAttr(it.error)}</div>
+          <div style="display:flex;gap:6px">
+            <button class="btn small" onclick="retryRejected(${i})">إعادة المحاولة</button>
+            <button class="btn danger small" onclick="discardRejected(${i})">حذف</button>
+          </div>
+        </div>`).join("")}
+      <div class="modal-actions"><button class="btn secondary" onclick="closeRejectedModal()">إغلاق</button></div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+function closeRejectedModal(){
+  const el = document.getElementById("rejected-overlay");
+  if(el) el.remove();
+}
+function retryRejected(i){
+  const list = getRejected();
+  const it = list[i];
+  if(!it) return;
+  list.splice(i,1); setRejected(list);
+  const q = getOutbox();
+  q.push({ qid:newQid(), action:it.action, payload:it.payload, ts:Date.now(), by:it.by||"" });
+  setOutbox(q);
+  rebuildExpensesFromOutbox();
+  render(); openRejectedModal();
+  trySyncOutbox();
+}
+function discardRejected(i){
+  if(!confirm("حذف هذا التغيير نهائيًا؟ لن يُحفظ.")) return;
+  const list = getRejected(); list.splice(i,1); setRejected(list);
+  render(); openRejectedModal();
+}
+function agoText(ts){
+  if(!ts) return "";
+  const m = Math.round((Date.now()-ts)/60000);
+  if(m < 1) return "الآن";
+  if(m < 60) return `قبل ${m} دقيقة`;
+  const h = Math.round(m/60);
+  if(h < 24) return `قبل ${h} ساعة`;
+  return `قبل ${Math.round(h/24)} يوم`;
+}
+function outboxBannerHtml(){
+  const q = getOutbox(), mine = q.filter(isMine).length, others = q.length - mine, rej = getRejected().length;
+  let h = "";
+  if(mine>0) h += `<div class="offline-banner no-print">⚠ ${mine} تغيير بانتظار الاتصال بالإنترنت للمزامنة${others>0 ? ` · ${others} تخص مستخدمًا آخر وتُرسل عند دخوله` : ""}</div>`;
+  else if(others>0) h += `<div class="offline-banner no-print">⏳ ${others} تغيير يخص مستخدمًا آخر على هذا الجهاز، يُرسل عند دخوله.</div>`;
+  if(rej>0) h += `<div class="offline-banner no-print" style="cursor:pointer;background:var(--danger-dim);color:var(--danger)" onclick="openRejectedModal()">❗ ${rej} تغيير رفضه الخادم ولم يُحفظ — اضغط للمراجعة</div>`;
+  return h;
+}
+
+// ---- cash-box (الصندوق المالي) local copy + pending changes ----
+const FIN_CACHE_KEY = 'isp_cache_fin';
+function cacheFin(){
+  try{ localStorage.setItem(FIN_CACHE_KEY, JSON.stringify({ expenses:state.expensesServer, counts:state.cashCounts, ts:Date.now() })); }catch(e){}
+}
+function loadFinCache(){ try{ return JSON.parse(localStorage.getItem(FIN_CACHE_KEY)||'null'); }catch(e){ return null; } }
+// the list the page works with = what the server last told us + the changes still waiting in the queue
+function overlayExpenses(serverList){
+  const list = (serverList||[]).map(e=>({...e}));
+  getOutbox().forEach(item=>{
+    const p = item.payload || {};
+    if(item.action==="addExpense"){
+      const id = p.clientId || ("p-"+item.qid);
+      if(list.some(e=>e.id===id)) return;
+      list.push({ id, type:p.type, box:p.box, rate:p.rate||0, date:p.date, category:p.category, categoryOther:p.categoryOther||"",
+                  recipient:p.recipient, recipientOther:p.recipientOther||"", currency:p.currency, amount:p.amount, notes:p.notes||"",
+                  addedBy: item.by || "", pending:true });
+    } else if(item.action==="editExpense"){
+      const idx = list.findIndex(e=>e.id===p.id);
+      if(idx>-1) list[idx] = { ...list[idx], ...p.patch, id:p.id, pending:true };
+    }
+  });
+  return list;
+}
+function rebuildExpensesFromOutbox(){ state.expensesList = overlayExpenses(state.expensesServer); }
+function updateQueuedAdd(clientId, form){
+  const q = getOutbox();
+  const it = q.find(x=>x.action==="addExpense" && x.payload && x.payload.clientId===clientId);
+  if(!it) return false;
+  it.payload = { ...form, clientId };
+  setOutbox(q);
+  return true;
+}
+function cancelQueuedAdd(clientId){
+  const q = getOutbox();
+  const it = q.find(x=>x.action==="addExpense" && x.payload && x.payload.clientId===clientId);
+  if(!it) return false;
+  removeFromOutbox(it.qid);
+  return true;
+}
 
 async function loadAllData(silent){
   const cached = loadCache();
@@ -722,6 +880,7 @@ async function submitLogin(){
 function logout(){
   state.user=null;
   window.__ispSession.clear();
+  try{ localStorage.removeItem('isp_cache'); localStorage.removeItem(FIN_CACHE_KEY); }catch(e){}   // private figures do not stay on a shared device (queued changes DO stay)
   render();
 }
 
@@ -773,7 +932,7 @@ function render(){
         <button class="nav-btn" onclick="logout()">تسجيل خروج</button>
       </div>
     </div>
-    ${getOutbox().length>0 ? `<div class="offline-banner no-print">⚠ ${getOutbox().length} تغيير بانتظار الاتصال بالإنترنت للمزامنة</div>` : ""}
+    ${outboxBannerHtml()}
     <div class="body-row">
       <div class="sidebar no-print">
         ${navItems.map(([k,l])=>`<button class="nav-btn ${state.view===k?'active':''}" onclick="setView('${k}')">${l}</button>`).join("")}
@@ -820,6 +979,7 @@ async function refreshData(){
   await loadAllData();
   if(state.view==="activitylog") await loadActivityLog();
   if(state.view==="users") await loadUsers();
+  if(state.view==="expenses") await loadExpenses(true);
   showToast(state.error ? ("تعذر التحديث: " + state.error) : "تم التحديث ✓");
 }
 
@@ -1789,14 +1949,31 @@ function reachedForMonth(month){
   };
 }
 
-async function loadExpenses(){
+async function loadExpenses(silent){
   if(!state.expensesMonth) state.expensesMonth = currentMonthKey;
-  state.expensesLoading = true; render();
+  if(!state.expensesLoaded){
+    const c = loadFinCache();                      // show the last known figures immediately (also when there is no internet)
+    if(c){
+      state.expensesServer = c.expenses || []; state.cashCounts = c.counts || [];
+      state.expensesLastOk = c.ts || 0; state.expensesLoaded = true; state.expensesStale = true;
+      rebuildExpensesFromOutbox();
+    }
+  }
+  if(!silent){ state.expensesLoading = !state.expensesLoaded; render(); }
   const r = await api("getExpenses", {});
-  if(r.ok) state.expensesList = r.expenses || []; else showToast("تعذر تحميل بيانات الصندوق: " + (r.error||""));
-  const rc = await api("getCashCounts", {limit:30});
-  if(rc.ok){ state.cashCounts = rc.counts || []; state.cashCountsError = ""; }
-  else { state.cashCounts = []; state.cashCountsError = rc.missingSheet ? (rc.error||"") : ""; }
+  if(r.ok){
+    state.expensesServer = r.expenses || [];
+    state.expensesLoaded = true; state.expensesStale = false; state.expensesLoadError = ""; state.expensesLastOk = Date.now();
+    const rc = await api("getCashCounts", {limit:30});
+    if(rc.ok){ state.cashCounts = rc.counts || []; state.cashCountsError = ""; }
+    else if(rc.missingSheet){ state.cashCounts = []; state.cashCountsError = rc.error || ""; }
+    cacheFin();
+    rebuildExpensesFromOutbox();
+  } else {
+    state.expensesStale = true;
+    if(!state.expensesLoaded) state.expensesLoadError = r.networkError ? "لا يوجد اتصال بالإنترنت ولا توجد نسخة محفوظة من بيانات الصندوق." : (r.error || "تعذر تحميل بيانات الصندوق");
+    else if(!r.networkError && !r.authError) showToast("تعذر تحميل بيانات الصندوق: " + (r.error||""));
+  }
   state.expensesLoading = false; render();
 }
 
@@ -1995,7 +2172,7 @@ function renderExpenseTable(list, month){
       const eq = (e.currency==='USD' && e.rate>0) ? `<div style="color:var(--muted);font-size:11px;font-weight:400">≈ ${fmtMoney(e.amount*e.rate)} (سعر ${e.rate.toLocaleString("en-US")})</div>` : "";
       return `<tr>
       <td>${e.date}</td>
-      <td><span class="pill ${e.type==='in'?'ok':'late'}">${e.type==='in'?'وارد':'صادر'}</span></td>
+      <td><span class="pill ${e.type==='in'?'ok':'late'}">${e.type==='in'?'وارد':'صادر'}</span>${e.pending?'<div><span class="pill warn" style="margin-top:4px">⏳ بانتظار المزامنة</span></div>':''}</td>
       <td>${catLabel(e)}<div style="color:var(--muted);font-size:11px">${partyLabel(e)}</div></td>
       <td>${isHandover(e) ? "محمد ← فراس" : BOX_NAME[boxOf(e)]}</td>
       <td style="color:${e.type==='in'?'var(--accent)':'var(--danger)'};font-weight:600">${e.type==='in'?'+':'−'} ${fmtCurrency(e.amount, e.currency)}${eq}</td>
@@ -2010,6 +2187,15 @@ function renderExpenseTable(list, month){
 
 function renderExpenses(){
   ensureExpenseForm();
+  if(!state.expensesLoaded){
+    return `<h1 class="page-title">الصندوق المالي</h1>` + (state.expensesLoading
+      ? `<div class="empty">جارِ التحميل...</div>`
+      : `<div class="panel"><div class="empty">${escAttr(state.expensesLoadError || "لم تُحمَّل بيانات الصندوق بعد")}</div><div style="text-align:center;margin-top:8px"><button class="btn" onclick="loadExpenses()">إعادة المحاولة</button></div></div>`);
+  }
+  const pendingFin = state.expensesList.filter(e=>e.pending).length;
+  const finNotice = state.expensesStale
+    ? `<div class="offline-banner" style="border-radius:8px;margin-bottom:12px">⚠ لا يوجد اتصال — تُعرض آخر نسخة محفوظة (${agoText(state.expensesLastOk)})${pendingFin>0 ? ` · ${pendingFin} حركة بانتظار المزامنة وهي محسوبة في الأرصدة` : ""}</div>`
+    : (pendingFin>0 ? `<div class="offline-banner" style="border-radius:8px;margin-bottom:12px">⏳ ${pendingFin} حركة بانتظار المزامنة، وهي محسوبة في الأرصدة</div>` : "");
   const isAdmin = state.user.role==="admin";
   const month = state.expensesMonth || currentMonthKey;
   const list = state.expensesList.filter(e=>(e.date||"").slice(0,7)===month).sort((a,b)=>b.date.localeCompare(a.date));
@@ -2020,6 +2206,7 @@ function renderExpenses(){
 
   return `
   <h1 class="page-title">الصندوق المالي</h1>
+  ${finNotice}
 
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin-bottom:18px">
     ${boxCardHtml("المتبقي عند محمد (المحاسب)", boxes.mohammed, "mohammed")}
@@ -2096,6 +2283,11 @@ function renderCashCountPanel(){
 }
 
 function openCashCountModal(box){
+  const pend = state.expensesList.filter(e=>e.pending).length + getOutbox().filter(i=>i.action==="setPaymentStatus" && isMine(i)).length;
+  if(state.expensesStale || pend>0){
+    alert("لا يمكن الجرد الآن: " + (pend>0 ? "توجد تغييرات بانتظار المزامنة" : "بيانات الصندوق غير محدّثة (لا يوجد اتصال)") + ".\nالجرد يقارن المبلغ الفعلي بالمتوقع، ويجب أن يكون المتوقع محدّثًا. انتظر حتى تتم المزامنة ثم أعد المحاولة.");
+    return;
+  }
   const d = boxesData()[box];
   const showUSD = d.hasUSD || d.usd!==0;
   const expSYP = Math.round(d.syp), expUSD = Math.round(d.usd);
@@ -2213,18 +2405,32 @@ async function submitExpenseForm(){
     return;
   }
   const keepType = expenseForm.type;
-  let r;
-  if(editingExpenseId){
-    r = await api("editExpense", {id:editingExpenseId, patch:expenseForm});
+  const form = { ...expenseForm };
+  const wasEditing = editingExpenseId;
+  const afterQueued = (msg)=>{
+    editingExpenseId = null;
+    expenseForm = blankExpenseForm(keepType);
+    rebuildExpensesFromOutbox();
+    render();
+    showToast(msg, 4000);
+  };
+  if(wasEditing){
+    // an entry that has not reached the server yet: just rewrite the waiting request
+    if(updateQueuedAdd(wasEditing, form)){ afterQueued("تم تعديل الحركة المعلّقة ✓"); return; }
+    const r = await api("editExpense", {id:wasEditing, patch:form});
+    if(r.networkError){ queueOutbox("editExpense", {id:wasEditing, patch:form}); afterQueued("لا يوجد اتصال — سيُحفظ التعديل تلقائيًا عند عودة الإنترنت"); return; }
+    if(!r.ok){ alert(r.error || "تعذر الحفظ"); return; }
   } else {
-    r = await api("addExpense", expenseForm);
+    // the client-made id makes a retry harmless: the server ignores a movement it already has
+    const payload = { ...form, clientId:newClientId() };
+    const r = await api("addExpense", payload);
+    if(r.networkError){ queueOutbox("addExpense", payload); afterQueued("لا يوجد اتصال — حُفظت الحركة على الجهاز وستُرسل تلقائيًا عند عودة الإنترنت"); return; }
+    if(!r.ok){ alert(r.error || "تعذر الحفظ"); return; }
   }
-  if(r.networkError){ alert("لا يوجد اتصال بالإنترنت — لم تُحفظ الحركة. أعد المحاولة عند عودة الاتصال."); return; }
-  if(!r.ok){ alert(r.error || "تعذر الحفظ"); return; }
   editingExpenseId = null;
   expenseForm = blankExpenseForm(keepType);
   showToast("تم الحفظ ✓");
-  await loadExpenses();
+  await loadExpenses(true);
 }
 function startEditExpense(id){
   const e = state.expensesList.find(x=>x.id===id);
@@ -2241,8 +2447,10 @@ function cancelEditExpense(){
 }
 async function deleteExpenseRow(id){
   if(!confirm("حذف هذه الحركة نهائيًا؟")) return;
+  // a movement still waiting in the queue was never saved: just cancel it
+  if(cancelQueuedAdd(id)){ rebuildExpensesFromOutbox(); render(); showToast("أُلغيت الحركة المعلّقة"); return; }
   const r = await api("deleteExpense", {id});
-  if(r.ok) await loadExpenses(); else alert(r.error);
+  if(r.ok) await loadExpenses(true); else alert(r.networkError ? "الحذف يحتاج اتصالًا بالإنترنت. أعد المحاولة عند عودته." : r.error);
 }
 
 // ======================= PRICING =======================
