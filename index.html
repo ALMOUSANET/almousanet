@@ -283,7 +283,7 @@ input, select { background:var(--panel-2); border:1px solid var(--border); color
 
 <script>
 // ======================= CONFIG =======================
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwQTglWdL7Zuc9R0Yh-1sbIzQBctT2aA2xhoCchu4630z5Ns2U7iQEbiBmW5sUbV-E_LA/exec";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx-skHPz0bZ28exQM-98r0j0GV0sGG30J9NxIZbQ3I_CxQiil_JxhRaMa_TiaeV2Rqfmw/exec";
 window.APPS_SCRIPT_URL_FOR_REPORT = APPS_SCRIPT_URL;
 const ARABIC_MONTHS = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
 const DEFAULT_PRICING = { 2:120000, 3:150000, 5:225000, 8:320000, 12:450000 };
@@ -491,6 +491,14 @@ function queueOutbox(action, payload){
   setOutbox(q);
 }
 function removeFromOutbox(qid){ setOutbox(getOutbox().filter(x=>x.qid!==qid)); }
+function markSending(qid, on){
+  const q = getOutbox();
+  const it = q.find(x=>x.qid===qid);
+  if(!it) return;
+  if(on) it.sending = true; else delete it.sending;
+  setOutbox(q);
+}
+function isInFlight(item){ return !!item.sending && outboxSyncing; }
 function getRejected(){ try{ return JSON.parse(localStorage.getItem('isp_outbox_rejected')||'[]'); }catch(e){ return []; } }
 function setRejected(arr){ try{ localStorage.setItem('isp_outbox_rejected', JSON.stringify(arr)); }catch(e){} }
 function isMine(item){ return !item.by || !state.user || item.by===state.user.username; }
@@ -512,8 +520,9 @@ async function trySyncOutbox(){
       if(touched) setOutbox(q);
       const item = q.find(isMine);
       if(!item) break;
+      markSending(item.qid, true);                      // the request below already carries the OLD data: an edit now must wait
       const res = await api(item.action, item.payload);
-      if(res.networkError || res.authError) break;
+      if(res.networkError || res.authError){ markSending(item.qid, false); break; }
       removeFromOutbox(item.qid);                       // progress is saved after EVERY item
       if(res.ok || res.alreadyPaid){
         done++;
@@ -530,9 +539,10 @@ async function trySyncOutbox(){
   if(done) showToast(`تمت مزامنة ${done} تغيير معلّق ✓`);
   if(rejected) showToast(`${rejected} تغيير رفضه الخادم — اضغط التنبيه أعلى الصفحة لمراجعته`, 6000);
   if(done || rejected){
-    rebuildExpensesFromOutbox();
+    // refresh the cash box BEFORE anything else and do not drop the waiting entries first:
+    // they stay visible (marked pending) until the server list that contains them arrives
+    if(finOps || state.view==="expenses") await loadExpenses(true); else rebuildExpensesFromOutbox();
     await loadAllData(true);
-    if(finOps || state.view==="expenses") await loadExpenses(true);
   }
 }
 window.addEventListener('online', ()=>{
@@ -641,10 +651,12 @@ function overlayExpenses(serverList){
   return list;
 }
 function rebuildExpensesFromOutbox(){ state.expensesList = overlayExpenses(state.expensesServer); }
+// returns false (not queued), "busy" (being sent this very moment) or true (rewritten)
 function updateQueuedAdd(clientId, form){
   const q = getOutbox();
   const it = q.find(x=>x.action==="addExpense" && x.payload && x.payload.clientId===clientId);
   if(!it) return false;
+  if(isInFlight(it)) return "busy";
   it.payload = { ...form, clientId };
   setOutbox(q);
   return true;
@@ -653,6 +665,7 @@ function cancelQueuedAdd(clientId){
   const q = getOutbox();
   const it = q.find(x=>x.action==="addExpense" && x.payload && x.payload.clientId===clientId);
   if(!it) return false;
+  if(isInFlight(it)) return "busy";
   removeFromOutbox(it.qid);
   return true;
 }
@@ -1352,7 +1365,7 @@ function renderCustomers(){
   if(customerForm.speed===null) customerForm.speed = speeds[0]||2;
   return `
   <h1 class="page-title">الزبائن</h1>
-  <div class="panel">
+  <div class="panel" oninput="syncCustomerForm()" onchange="syncCustomerForm()">
     <h3>إضافة زبون جديد</h3>
     ${customerFieldsHtml("cf", customerForm)}
     <div style="display:flex;gap:8px">
@@ -2107,7 +2120,7 @@ function renderExpenseForm(){
   const cats = withCurrent(EXPENSE_CATEGORIES[t], cat);
   const methods = withCurrent(DELIVERY_METHODS, expenseForm.recipient);
   return `
-  <div class="panel">
+  <div class="panel" oninput="syncExpenseForm()" onchange="syncExpenseForm()">
     <h3>${editingExpenseId?"تعديل حركة":"إضافة حركة جديدة"}</h3>
     <div class="form-row">
       <div><label>نوع الحركة</label>
@@ -2352,6 +2365,9 @@ async function settleCount(id){
 }
 
 // ---- form handlers ----
+// keeps the in-memory form equal to what is typed, so a refresh / sync / month change can never erase it
+function syncExpenseForm(){ try{ readExpenseForm(); }catch(e){} }
+function syncCustomerForm(){ try{ customerForm = readCustomerFields("cf"); }catch(e){} }
 function readExpenseForm(){
   const g = id => document.getElementById(id);
   const type = g("ef-type").value;
@@ -2416,9 +2432,19 @@ async function submitExpenseForm(){
   };
   if(wasEditing){
     // an entry that has not reached the server yet: just rewrite the waiting request
-    if(updateQueuedAdd(wasEditing, form)){ afterQueued("تم تعديل الحركة المعلّقة ✓"); return; }
+    const upd = updateQueuedAdd(wasEditing, form);
+    if(upd==="busy"){ alert("هذه الحركة قيد الإرسال إلى الخادم الآن. انتظر بضع ثوانٍ حتى تُحفظ ثم عدّلها، فلا يضيع تعديلك."); return; }
+    if(upd){ afterQueued("تم تعديل الحركة المعلّقة ✓"); return; }
     const r = await api("editExpense", {id:wasEditing, patch:form});
     if(r.networkError){ queueOutbox("editExpense", {id:wasEditing, patch:form}); afterQueued("لا يوجد اتصال — سيُحفظ التعديل تلقائيًا عند عودة الإنترنت"); return; }
+    if(!r.ok && /غير موجود/.test(r.error || "")){
+      // the entry was deleted, or was saved under a new number after a sync. Nothing was written.
+      editingExpenseId = null;
+      expenseForm = { ...form };                 // keep exactly what was typed; the button becomes «إضافة»
+      await loadExpenses(true);
+      alert("الحركة التي كنت تعدّلها لم تعد موجودة بهذا الرقم (حُذفت، أو حُفظت برقم جديد بعد المزامنة).\n\nلم يُحفظ شيء الآن، وحدّثتُ القائمة.\n• إن وجدتها في جدول «حركات الشهر» فعدّلها من هناك.\n• وإلا اضغط «إضافة» لحفظ ما أدخلته كحركة جديدة (ما كتبته ما زال في النموذج).");
+      return;
+    }
     if(!r.ok){ alert(r.error || "تعذر الحفظ"); return; }
   } else {
     // the client-made id makes a retry harmless: the server ignores a movement it already has
@@ -2448,7 +2474,9 @@ function cancelEditExpense(){
 async function deleteExpenseRow(id){
   if(!confirm("حذف هذه الحركة نهائيًا؟")) return;
   // a movement still waiting in the queue was never saved: just cancel it
-  if(cancelQueuedAdd(id)){ rebuildExpensesFromOutbox(); render(); showToast("أُلغيت الحركة المعلّقة"); return; }
+  const cq = cancelQueuedAdd(id);
+  if(cq==="busy"){ alert("هذه الحركة قيد الإرسال إلى الخادم الآن. انتظر بضع ثوانٍ حتى تُحفظ ثم احذفها."); return; }
+  if(cq){ rebuildExpensesFromOutbox(); render(); showToast("أُلغيت الحركة المعلّقة"); return; }
   const r = await api("deleteExpense", {id});
   if(r.ok) await loadExpenses(true); else alert(r.networkError ? "الحذف يحتاج اتصالًا بالإنترنت. أعد المحاولة عند عودته." : r.error);
 }
