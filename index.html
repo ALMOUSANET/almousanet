@@ -305,6 +305,8 @@ let state = {
   expensesList: [],
   expensesLoading: false,
   expensesMonth: null,
+  dataStale: false,
+  dataLastOk: 0,
   expensesServer: [],
   expensesLoaded: false,
   expensesStale: false,
@@ -674,23 +676,46 @@ async function loadAllData(silent){
   const cached = loadCache();
   if(cached && !state.customers.length){
     // instant paint from last known data while we fetch fresh data (helps on slow/offline connections)
-    state.customers = sanitizeCustomers(cached.customers); state.pricing = cached.pricing; state.payments = cached.payments;
+    state.customers = sanitizeCustomers(cached.customers); state.pricing = cached.pricing; state.payments = cached.payments || {};
+    state.dataLastOk = cached.ts || 0;
   }
   if(!silent){ state.loading = !state.customers.length ? true : false; render(); }
   const res = await api("getAllData");
   if(res.ok){
-    state.customers = sanitizeCustomers(res.customers);
-    state.pricing = res.pricing && Object.keys(res.pricing).length ? res.pricing : DEFAULT_PRICING;
-    state.payments = res.payments;
-    state.error = "";
-    cacheData();
+    const newCustomers = sanitizeCustomers(res.customers);
+    const newPayments = res.payments || {};
+    const prevPayments = Object.keys(state.payments || {}).length;
+    // an EMPTY reply when we already hold real data is not believable: keep the good copy and say so
+    const suspicious = (prevPayments >= 10 && Object.keys(newPayments).length === 0) || (state.customers.length >= 10 && newCustomers.length === 0);
+    if(suspicious){
+      state.dataStale = true;
+      state.error = "الخادم أرجع بيانات فارغة بشكل غير متوقع، فأبقيتُ آخر نسخة محفوظة ولم أستبدلها";
+    } else {
+      state.customers = newCustomers;
+      state.pricing = res.pricing && Object.keys(res.pricing).length ? res.pricing : DEFAULT_PRICING;
+      state.payments = newPayments;
+      state.error = "";
+      state.dataStale = false;
+      state.dataLastOk = Date.now();
+      cacheData();
+    }
+  } else if(res.authError){
+    /* handled by api(): the user is sent back to the login screen */
   } else if(res.networkError){
+    state.dataStale = true;
     state.error = cached ? "غير متصل بالإنترنت — تُعرض آخر نسخة محفوظة محليًا." : "تعذر الاتصال بالخادم. تحقق من الإنترنت.";
   } else {
+    state.dataStale = true;
     state.error = res.error || "تعذر تحميل البيانات";
   }
   state.loading = false; render();
   trySyncOutbox();
+}
+
+// a permanent warning whenever what is on screen is NOT the latest data from the server
+function staleBannerHtml(){
+  if(!state.dataStale || !state.customers.length) return "";
+  return `<div class="offline-banner no-print">⚠ البيانات المعروضة <b>نسخة محفوظة${state.dataLastOk ? " ("+agoText(state.dataLastOk)+")" : ""}</b> وليست محدّثة — ${escAttr(state.error || "تعذر الاتصال بالخادم")}. اضغط 🔄 تحديث للمحاولة.</div>`;
 }
 
 async function loadActivityLog(){
@@ -945,6 +970,7 @@ function render(){
         <button class="nav-btn" onclick="logout()">تسجيل خروج</button>
       </div>
     </div>
+    ${staleBannerHtml()}
     ${outboxBannerHtml()}
     <div class="body-row">
       <div class="sidebar no-print">
