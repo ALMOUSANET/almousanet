@@ -321,7 +321,20 @@ let state = {
 const months = generateMonths();
 const currentMonthKey = months[months.length - 1].key;
 
-const FULL_YEAR_MONTHS = Array.from({length:12}, (_,i)=>({ key: monthKeyOf(2026, i+1), label: `${ARABIC_MONTHS[i]} 2026`, abbr: String(i+1) }));
+// years: the app starts in 2026 and grows by itself every January (no code change needed)
+const START_YEAR = 2026;
+const CURRENT_YEAR = Math.max(START_YEAR, Number(currentMonthKey.slice(0,4)));
+function yearMonths(y){ return Array.from({length:12}, (_,i)=>({ key: monthKeyOf(y, i+1), label: `${ARABIC_MONTHS[i]} ${y}`, abbr: String(i+1), year:y })); }
+const YEARS = Array.from({length: CURRENT_YEAR-START_YEAR+1}, (_,i)=>START_YEAR+i);
+// every month of every year so far: debts are summed across years, not only the displayed one
+const ALL_MONTHS = YEARS.flatMap(yearMonths);
+if(state.viewYear === undefined) state.viewYear = CURRENT_YEAR;
+function viewYearMonths(){ return yearMonths(state.viewYear); }
+function yearSelectHtml(){
+  if(YEARS.length < 2) return "";
+  return `<div><label style="display:block;font-size:12.5px;color:var(--muted);margin-bottom:4px">السنة</label>
+    <select onchange="state.viewYear=Number(this.value); render()">${YEARS.slice().reverse().map(y=>`<option value="${y}" ${y===state.viewYear?'selected':''}>${y}</option>`).join("")}</select></div>`;
+}
 
 // ======================= HELPERS =======================
 function fmtMoney(n) { return (Number(n) || 0).toLocaleString("en-US") + " ل.س"; }
@@ -354,7 +367,10 @@ function toWhatsAppNumber(phone){
 }
 function waLink(phone,message){ return `https://wa.me/${toWhatsAppNumber(phone)}?text=${encodeURIComponent(message)}`; }
 function priceFor(speed){ return state.pricing[speed] ?? 0; }
-function monthLabelOf(key){ return months.find(m=>m.key===key)?.label || key || "—"; }
+function monthLabelOf(key){
+  const m = /^(\d{4})-(\d{2})$/.exec(String(key||""));
+  return m ? `${ARABIC_MONTHS[Number(m[2])-1]} ${m[1]}` : (key || "—");
+}
 
 function buildReminderMessage(c, unpaidMonths, debtAmount){
   const list = unpaidMonths.map(m=>m.label).join("، ");
@@ -672,7 +688,7 @@ function cancelQueuedAdd(clientId){
   return true;
 }
 
-async function loadAllData(silent){
+async function loadAllData(silent, fresh){
   const cached = loadCache();
   if(cached && !state.customers.length){
     // instant paint from last known data while we fetch fresh data (helps on slow/offline connections)
@@ -680,7 +696,7 @@ async function loadAllData(silent){
     state.dataLastOk = cached.ts || 0;
   }
   if(!silent){ state.loading = !state.customers.length ? true : false; render(); }
-  const res = await api("getAllData");
+  const res = await api("getAllData", fresh ? { fresh:true } : {});
   if(res.ok){
     const newCustomers = sanitizeCustomers(res.customers);
     const newPayments = res.payments || {};
@@ -735,7 +751,7 @@ function enabledCustomers(){ return state.customers.filter(c=>c.active!==false);
 //  'not_subscribed' -> explicit record OR implied (month before joinMonth) OR implied (month in the future, not due yet)
 //  'unpaid'         -> no record, month is on/before the current month, and on/after joinMonth
 function getStatementRows(customer){
-  return FULL_YEAR_MONTHS.map(m=>{
+  return ALL_MONTHS.map(m=>{
     const rec = state.payments[`${customer.id}:${m.key}`];
     const due = priceFor(customer.speed);
     let status;
@@ -746,7 +762,7 @@ function getStatementRows(customer){
     else if(m.key > currentMonthKey) status = 'not_due_yet';
     else status = 'unpaid';
     return {
-      key:m.key, label:m.label, abbr:m.abbr, due, status,
+      key:m.key, label:m.label, abbr:m.abbr, year:m.year, due, status,
       paid: status==='paid',
       amount: rec?.amount||0, date: rec?.date||null, recordedBy: rec?.recordedBy||"",
       receivedBy: rec?.receivedBy==='firas' ? 'firas' : 'mohammed'
@@ -896,9 +912,16 @@ if('serviceWorker' in navigator){
 }
 
 // ======================= LOGIN =======================
+function togglePasswordView(){
+  const el = document.getElementById("login-password"), eye = document.getElementById("login-eye");
+  if(!el) return;
+  const show = el.type === "password";
+  el.type = show ? "text" : "password";
+  if(eye){ eye.textContent = show ? "🙈" : "👁"; eye.title = show ? "إخفاء كلمة السر" : "إظهار كلمة السر"; }
+}
 async function submitLogin(){
   const username = document.getElementById("login-username").value.trim();
-  const password = document.getElementById("login-password").value;
+  const password = document.getElementById("login-password").value.trim();   // phone keyboards often add a space
   const remember = document.getElementById("login-remember").checked;
   const errEl = document.getElementById("login-error");
   errEl.textContent = "";
@@ -935,7 +958,10 @@ function renderLogin(){
       ${expired ? `<div style="background:var(--warn-dim);color:var(--warn);font-size:12.5px;padding:8px 10px;border-radius:7px;margin-bottom:12px">انتهت الجلسة أو أُوقف الحساب. سجّل الدخول من جديد.</div>` : ""}
       <div class="err-msg" id="login-error"></div>
       <input id="login-username" placeholder="اسم المستخدم" />
-      <input id="login-password" type="password" placeholder="كلمة السر" onkeydown="if(event.key==='Enter') submitLogin()" />
+      <div style="position:relative">
+        <input id="login-password" type="password" placeholder="كلمة السر" autocapitalize="off" autocorrect="off" spellcheck="false" onkeydown="if(event.key==='Enter') submitLogin()" style="width:100%;padding-left:44px" />
+        <button type="button" id="login-eye" onclick="togglePasswordView()" aria-label="إظهار كلمة السر" title="إظهار كلمة السر" style="position:absolute;left:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:18px;padding:4px 6px;color:var(--muted)">👁</button>
+      </div>
       <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);margin-bottom:14px;cursor:pointer">
         <input id="login-remember" type="checkbox" style="width:auto;margin:0" /> تذكرني
       </label>
@@ -1015,7 +1041,7 @@ function toggleTheme(){
 
 async function refreshData(){
   showToast("جارِ التحديث...", 60000);
-  await loadAllData();
+  await loadAllData(false, true);
   if(state.view==="activitylog") await loadActivityLog();
   if(state.view==="users") await loadUsers();
   if(state.view==="expenses") await loadExpenses(true);
@@ -1530,8 +1556,9 @@ if(state.paymentsFilter === undefined) state.paymentsFilter = "all";
 
 function renderPayments(){
   return `
-  <h1 class="page-title">الدفعات — 2026</h1>
+  <h1 class="page-title">الدفعات — ${state.viewYear}</h1>
   <div class="form-row">
+    ${yearSelectHtml()}
     <div style="flex:1;min-width:220px">
       <label style="display:block;font-size:12.5px;color:var(--muted);margin-bottom:4px">بحث بالاسم / حساب المايكروتك</label>
       <input id="payments-search-input" style="width:100%" value="${state.paymentsSearch}" oninput="onPaymentsSearchInput(this.value)" placeholder="اكتب للبحث..." />
@@ -1617,11 +1644,11 @@ function renderPaymentsGridOnly(){
   return `
     <table style="min-width:980px; border-collapse:separate; border-spacing:0">
       <thead><tr>
-        <th class="col-sticky-1">الزبون</th><th>الباقة</th><th>إجمالي الدين</th>
-        ${FULL_YEAR_MONTHS.map(m=>`<th title="${m.label}">${m.abbr}</th>`).join("")}
+        <th class="col-sticky-1">الزبون</th><th>الباقة</th><th title="كل السنوات">إجمالي الدين</th>
+        ${viewYearMonths().map(m=>`<th title="${m.label}">${m.abbr}</th>`).join("")}
       </tr></thead>
       <tbody>${list.map(c=>{
-        const rows = getStatementRows(c);
+        const rows = getStatementRows(c).filter(r=>r.year===state.viewYear);
         const totals = customerTotals(c);
         return `<tr>
           <td class="col-sticky-1">
@@ -1771,10 +1798,12 @@ function statusPill(status){
 
 function renderStatementBody(customer){
   if(!customer) return `<div class="panel"><div class="empty">أضف زبائن أولاً من صفحة الزبائن</div></div>`;
-  const rows = getStatementRows(customer);
-  const totalPaid = rows.reduce((s,r)=>s+(r.status==='paid'?r.amount:0),0);
-  const totalDue = rows.reduce((s,r)=>s+(r.status==='unpaid'?r.due:0),0);
-  const unpaidCount = rows.filter(r=>r.status==='unpaid').length;
+  const allRows = getStatementRows(customer);
+  const rows = allRows.filter(r=>r.year===state.viewYear);
+  const totalPaid = allRows.reduce((s,r)=>s+(r.status==='paid'?r.amount:0),0);
+  const totalDue = allRows.reduce((s,r)=>s+(r.status==='unpaid'?r.due:0),0);
+  const unpaidCount = allRows.filter(r=>r.status==='unpaid').length;
+  const otherYearsDue = allRows.filter(r=>r.status==='unpaid' && r.year!==state.viewYear).reduce((s,r)=>s+r.due,0);
   return `
   <div class="panel no-print" style="display:flex;gap:10px;flex-wrap:wrap">
     <button class="btn" onclick="window.print()">طباعة / حفظ PDF</button>
@@ -1786,6 +1815,7 @@ function renderStatementBody(customer){
     <div style="color:var(--muted);font-size:13px;margin-bottom:14px">
       الباقة: ${customer.speed} ميغا — ${fmtMoney(priceFor(customer.speed))} · الهاتف: ${customer.phone||"—"} · مشترك منذ: ${monthLabelOf(customer.joinMonth)}
     </div>
+    <div style="font-size:12.5px;color:var(--muted);margin-bottom:6px">أشهر ${state.viewYear}</div>
     <table><thead><tr><th>الشهر</th><th>المستحق</th><th>الحالة</th><th>تاريخ الدفع</th><th>سجّلها</th><th class="no-print"></th></tr></thead>
     <tbody>${rows.map(r=>`<tr><td>${r.label}</td><td>${fmtMoney(r.due)}</td>
       <td>${statusPill(r.status)}</td>
@@ -1794,7 +1824,7 @@ function renderStatementBody(customer){
       <td class="no-print"><button class="btn secondary small" onclick='openGridCellModal(${JSON.stringify(customer.id)},"${r.key}")'>تعديل</button></td></tr>`).join("")}</tbody></table>
     <div class="stat-grid" style="margin-top:16px;margin-bottom:0">
       <div class="stat-card accent"><div class="label">إجمالي المدفوع</div><div class="value">${fmtMoney(totalPaid)}</div></div>
-      <div class="stat-card danger"><div class="label">إجمالي المتبقي</div><div class="value">${fmtMoney(totalDue)}</div></div>
+      <div class="stat-card danger"><div class="label">إجمالي المتبقي (كل السنوات)</div><div class="value">${fmtMoney(totalDue)}</div>${otherYearsDue>0?`<div class="sub">منها ${fmtMoney(otherYearsDue)} من سنوات أخرى</div>`:""}</div>
     </div>
   </div>`;
 }
@@ -1804,6 +1834,7 @@ function renderStatement(){
   const customer = state.customers.find(c=>c.id===state.statementCustomerId);
   return `
   <h1 class="page-title">كشف حساب الزبون</h1>
+  ${YEARS.length>1 ? `<div class="form-row no-print">${yearSelectHtml()}</div>` : ""}
   <div class="panel no-print">
     <label style="display:block;font-size:12.5px;color:var(--muted);margin-bottom:6px">اختر الزبون</label>
     <select onchange="state.statementCustomerId=this.value; render()" style="min-width:220px">
@@ -1818,26 +1849,75 @@ async function payAllOverdueForCustomer(id){
   await loadAllData();
   const customer = state.customers.find(c=>c.id===id);
   if(!customer) return;
-  const rows = getStatementRows(customer);
-  const unpaid = rows.filter(r=>r.status==='unpaid');
+  const unpaid = getStatementRows(customer).filter(r=>r.status==='unpaid');
   if(unpaid.length===0){ alert("لا يوجد أشهر متأخرة لهذا الزبون."); return; }
-  const total = unpaid.reduce((s,r)=>s+r.due,0);
-  if(!confirm(`رح يتسجل دفع ${unpaid.length} شهر بإجمالي ${fmtMoney(total)} لـ ${customer.name}. متأكد؟`)) return;
-  const direct = confirm("هل دُفعت هذه المبالغ كتحويل مباشر لك (وليس عند محمد)؟\nموافق = تحويل مباشر لفراس\nإلغاء = استلمها محمد");
-  const receivedBy = direct ? 'firas' : 'mohammed';
-  for(const r of unpaid){
-    const res = await api("setPaymentStatus", {customerId:customer.id, month:r.key, status:'paid', amount:r.due, receivedBy, expectNew:true});
-    if(res.alreadyPaid) continue;   // someone recorded this month a moment ago: leave it untouched
-    if(!res.ok){ showToast("تعذر الحفظ: " + (res.error||"")); break; }
+  closePayAllModal();
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.id = "payall-overlay";
+  overlay.innerHTML = `
+    <div class="modal-box stack-form" style="max-width:480px;max-height:90vh;overflow-y:auto">
+      <h3>دفع كل المتأخر — ${escAttr(customer.name)}</h3>
+      <div style="color:var(--muted);font-size:12.5px;margin-bottom:10px">المبلغ المقترح هو سعر الباقة اليوم. عدّل مبلغ أي شهر كان سعره مختلفًا، وألغِ تحديد الشهر الذي لم يُدفع.</div>
+      ${unpaid.map((r,i)=>`
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <input type="checkbox" id="pa-on-${i}" checked onchange="updatePayAllTotal(${unpaid.length})" style="width:auto" />
+          <label for="pa-on-${i}" style="flex:1;margin:0">${r.label}</label>
+          <input id="pa-amt-${i}" type="number" value="${r.due}" oninput="updatePayAllTotal(${unpaid.length})" style="width:130px" />
+        </div>`).join("")}
+      <div class="form-row" style="margin-top:8px"><div><label>من استلم المبلغ؟</label>
+        <select id="pa-receiver"><option value="mohammed">محمد (المحاسب)</option><option value="firas">فراس مباشرة (تحويل)</option></select></div></div>
+      <div id="pa-total" style="font-weight:700;margin:8px 0"></div>
+      <div class="modal-actions">
+        <button class="btn" onclick='confirmPayAll(${JSON.stringify(customer.id)}, ${JSON.stringify(unpaid.map(r=>r.key))})'>تسجيل الدفع</button>
+        <button class="btn secondary" onclick="closePayAllModal()">إلغاء</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  updatePayAllTotal(unpaid.length);
+}
+function closePayAllModal(){ const el = document.getElementById("payall-overlay"); if(el) el.remove(); }
+function updatePayAllTotal(n){
+  let total = 0, count = 0;
+  for(let i=0;i<n;i++){
+    const on = document.getElementById("pa-on-"+i), amt = document.getElementById("pa-amt-"+i);
+    if(on && on.checked){ total += Number(amt && amt.value) || 0; count++; }
   }
+  const el = document.getElementById("pa-total");
+  if(el) el.textContent = `${count} شهر — الإجمالي ${fmtMoney(total)}`;
+}
+async function confirmPayAll(customerId, keys){
+  const picks = [];
+  for(let i=0;i<keys.length;i++){
+    const on = document.getElementById("pa-on-"+i), amt = document.getElementById("pa-amt-"+i);
+    if(!on || !on.checked) continue;
+    const amount = Number(amt && amt.value) || 0;
+    if(amount <= 0){ alert(`أدخل مبلغًا صحيحًا لشهر ${monthLabelOf(keys[i])}، أو ألغِ تحديده.`); return; }
+    picks.push({ month:keys[i], amount });
+  }
+  if(!picks.length){ alert("لم تحدد أي شهر."); return; }
+  const receivedBy = document.getElementById("pa-receiver")?.value==='firas' ? 'firas' : 'mohammed';
+  closePayAllModal();
+  showToast(`جارِ تسجيل ${picks.length} شهر...`, 60000);
+  let saved = 0;
+  for(const p of picks){
+    const res = await api("setPaymentStatus", {customerId, month:p.month, status:'paid', amount:p.amount, receivedBy, expectNew:true});
+    if(res.alreadyPaid) continue;   // someone recorded this month a moment ago: leave it untouched
+    if(res.networkError){ queueOutbox("setPaymentStatus", {customerId, month:p.month, status:'paid', amount:p.amount, receivedBy, expectNew:true}); applyLocalPaymentUpdate(customerId, p.month, 'paid', p.amount, state.user.name, receivedBy); saved++; continue; }
+    if(!res.ok){ hideToast(); alert("تعذر الحفظ: " + (res.error||"")); break; }
+    saved++;
+  }
+  hideToast();
+  showToast(`سُجّل ${saved} شهر ✓`);
   await loadAllData();
 }
 function sendStatementWA(){
   const customer = state.customers.find(c=>c.id===state.statementCustomerId);
   if(!customer) return;
-  const rows = getStatementRows(customer);
-  const totalPaid = rows.reduce((s,r)=>s+(r.status==='paid'?r.amount:0),0);
-  const totalDue = rows.filter(r=>r.status==='unpaid').length * priceFor(customer.speed);
+  const allRows = getStatementRows(customer);
+  const rows = allRows.filter(r=>r.year===state.viewYear || r.status==='unpaid');
+  const totalPaid = allRows.reduce((s,r)=>s+(r.status==='paid'?r.amount:0),0);
+  const totalDue = allRows.filter(r=>r.status==='unpaid').reduce((s,r)=>s+r.due,0);
   window.open(waLink(customer.phone, buildStatementMessage(customer, rows, totalPaid, totalDue)), "_blank");
 }
 
@@ -2082,7 +2162,7 @@ function renderProfitSection(month){
   const r = reachedForMonth(month);
   const reachedSYP = r.handSYP + r.directSYP;
   const custName = id => (state.customers.find(c=>c.id===id)||{}).name || id;
-  const yearRows = FULL_YEAR_MONTHS.filter(m=>m.key<=currentMonthKey).map(m=>{
+  const yearRows = viewYearMonths().filter(m=>m.key<=currentMonthKey).map(m=>{
     const pp = profitForMonth(m.key), rr = reachedForMonth(m.key);
     return { label:m.label.split(" ")[0], pp, reached: rr.handSYP + rr.directSYP };
   });
@@ -2129,7 +2209,7 @@ function renderProfitSection(month){
   </div>
 
   <div class="panel">
-    <h3>ملخص 2026 حتى الآن</h3>
+    <div class="section-heading"><h3>ملخص ${state.viewYear}${state.viewYear===CURRENT_YEAR?" حتى الآن":""}</h3>${YEARS.length>1?`<select onchange="state.viewYear=Number(this.value); render()">${YEARS.slice().reverse().map(y=>`<option value="${y}" ${y===state.viewYear?'selected':''}>${y}</option>`).join("")}</select>`:""}</div>
     <table style="min-width:520px"><thead><tr><th>الشهر</th><th>الإيراد</th><th>التكاليف</th><th>الربح التشغيلي</th><th>تجهيزات</th><th>وصلني</th></tr></thead>
     <tbody>${yearRows.map(x=>`<tr><td>${x.label}</td><td>${fmtMoney(x.pp.revenue)}</td><td>${fmtMoney(x.pp.costs)}</td>
       <td style="color:${col(x.pp.operating)};font-weight:700">${fmtMoney(x.pp.operating)}</td><td>${fmtMoney(x.pp.equipment)}</td><td>${fmtMoney(x.reached)}</td></tr>`).join("")}
@@ -2164,7 +2244,7 @@ function renderExpenseForm(){
       <div id="ef-category-other-wrap" style="display:${cat==='أخرى'?'block':'none'}">
         <label>تفاصيل الفئة</label><input id="ef-category-other" value="${escAttr(expenseForm.categoryOther)}" />
       </div>
-      <div id="ef-box-wrap" style="display:${isHand?'none':'block'}"><label>الصندوق</label>
+      <div id="ef-box-wrap" style="display:${(isHand || state.user.role!=="admin")?'none':'block'}"><label>الصندوق</label>
         <select id="ef-box">
           <option value="mohammed" ${expenseForm.box==='mohammed'?'selected':''}>صندوق محمد</option>
           <option value="firas" ${expenseForm.box==='firas'?'selected':''}>صندوق فراس</option>
@@ -2258,7 +2338,7 @@ function renderExpenses(){
     <div>
       <label style="display:block;font-size:12.5px;color:var(--muted);margin-bottom:4px">الشهر المعروض بالتقارير والجدول</label>
       <select onchange="state.expensesMonth=this.value; render()">
-        ${FULL_YEAR_MONTHS.map(m=>`<option value="${m.key}" ${m.key===month?'selected':''}>${m.label}</option>`).join("")}
+        ${ALL_MONTHS.slice().reverse().map(m=>`<option value="${m.key}" ${m.key===month?'selected':''}>${m.label}</option>`).join("")}
       </select>
     </div>
   </div>
@@ -2403,7 +2483,7 @@ function readExpenseForm(){
     type, category, currency,
     date: g("ef-date").value || todayDateStr(),
     categoryOther: g("ef-category-other")?.value?.trim() || "",
-    box: (type==='in' && category===HANDOVER_CATEGORY) ? "firas" : (g("ef-box").value || defaultBox(type, category)),
+    box: (type==='in' && category===HANDOVER_CATEGORY) ? "firas" : (state.user.role!=="admin" ? "mohammed" : (g("ef-box").value || defaultBox(type, category))),
     recipient: g("ef-recipient").value,
     recipientOther: g("ef-recipient-other")?.value?.trim() || "",
     rate: currency==='USD' ? (Number(g("ef-rate").value)||0) : 0,
@@ -2424,7 +2504,7 @@ function onExpenseCategoryChange(v){
   const isHand = (type==='in' && v===HANDOVER_CATEGORY);
   const show = (id, on) => { const el = document.getElementById(id); if(el) el.style.display = on ? 'block':'none'; };
   show("ef-category-other-wrap", v==='أخرى');
-  show("ef-box-wrap", !isHand);
+  show("ef-box-wrap", !isHand && state.user.role==="admin");
   show("ef-handover-hint", isHand);
   const box = document.getElementById("ef-box"); if(box) box.value = defaultBox(type, v);
 }
