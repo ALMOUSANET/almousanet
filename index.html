@@ -1395,7 +1395,7 @@ function gridRowActs(c, debt){
   if(!(debt > 0)) return "";
   const hasPhone = !!String(c.phone||"").replace(/\D/g,"");
   return `<div class="row-acts no-print">
-      <button class="wa ${hasPhone?'':'off'}" title="${hasPhone?'تذكير واتساب':'لا يوجد رقم هاتف'}" onclick='event.stopPropagation(); sendReminder(${JSON.stringify(c.id)})'>💬 تذكير</button>
+      <button class="wa ${hasPhone?'':'off'}" title="${hasPhone?'تذكير واتساب':'لا يوجد رقم — اضغط لإضافته'}" onclick='event.stopPropagation(); sendReminder(${JSON.stringify(c.id)})'>💬 تذكير</button>
       <button title="وعد بالدفع" onclick='event.stopPropagation(); openPromiseModal(${JSON.stringify(c.id)})'>🤝 وعد</button>
     </div>
     <div class="follow-mini" data-follow-mini="${c.id}">${followUpMini(c)}</div>`;
@@ -1417,7 +1417,7 @@ function sendReminder(id){
   const base = state.customers.find(x=>x.id===id);
   if(!base) return;
   const c = statsFor(base);
-  if(!String(c.phone||"").replace(/\D/g,"")){ alert(`لا يوجد رقم هاتف لـ ${c.name}.\nأضف رقمه من صفحة الزبائن ثم أعد المحاولة.`); return; }
+  if(!String(c.phone||"").replace(/\D/g,"")){ openCustomerEditModal(id, { askPhone:true }); return; }
   if(c.unpaidCount===0){ alert(`${c.name} لا يوجد عليه أي دين.`); return; }
   window.open(waLink(c.phone, buildReminderMessage(c, c.unpaidMonths, c.debtAmount)), "_blank");
   recordReminder(id);
@@ -1655,7 +1655,8 @@ async function submitCustomerForm(){
 }
 
 // ----- edit window (modal): opens right where you are, no scrolling back up -----
-function openCustomerEditModal(id){
+function openCustomerEditModal(id, opts){
+  opts = opts || {};
   const c = state.customers.find(x=>x.id===id);
   if(!c) return;
   closeCustomerEditModal();
@@ -1665,23 +1666,35 @@ function openCustomerEditModal(id){
   overlay.id = "customer-edit-overlay";
   overlay.innerHTML = `
     <div class="modal-box stack-form">
-      <h3>تعديل بيانات: ${escAttr(c.name)}</h3>
+      <h3>${opts.askPhone ? "أضف رقم الهاتف: " : "تعديل بيانات: "}${escAttr(c.name)}</h3>
+      ${opts.askPhone ? `<div style="background:var(--warn-dim);color:var(--warn);font-size:12.5px;padding:8px 10px;border-radius:7px;margin-bottom:10px">لا يوجد رقم هاتف لهذا المشترك. اكتب رقمه في خانة «رقم الهاتف» ثم اضغط «حفظ وإرسال التذكير».</div>` : ""}
       ${customerFieldsHtml("ce", v)}
       <div class="modal-actions">
-        <button class="btn" onclick='saveCustomerEdit(${JSON.stringify(id)})'>حفظ التعديل</button>
+        ${opts.askPhone
+          ? `<button class="btn" onclick='saveCustomerEdit(${JSON.stringify(id)}, true)'>💬 حفظ وإرسال التذكير</button>`
+          : `<button class="btn" onclick='saveCustomerEdit(${JSON.stringify(id)})'>حفظ التعديل</button>`}
         <button class="btn secondary" onclick="closeCustomerEditModal()">إلغاء</button>
       </div>
     </div>`;
   document.body.appendChild(overlay);
-  setTimeout(()=>{ const el = document.getElementById("ce-name"); if(el) el.focus(); }, 60);
+  setTimeout(()=>{
+    const el = document.getElementById(opts.askPhone ? "ce-phone" : "ce-name");
+    if(el){ el.focus(); if(opts.askPhone){ el.style.outline = "2px solid var(--warn)"; el.scrollIntoView && el.scrollIntoView({block:"center"}); } }
+  }, 60);
+}
+// after a customer's data changes: refresh the payments grid / dashboard card without losing the scroll position
+function refreshCustomerEverywhere(id){
+  if(state.view==="payments"){ const w = document.getElementById("payments-grid-wrap"); if(w){ const top = w.scrollTop, left = w.scrollLeft; w.innerHTML = renderPaymentsGridOnly(); w.scrollTop = top; w.scrollLeft = left; } }
+  if(state.view==="dashboard" && state.dashPick===id){ const card = document.getElementById("dash-card"); if(card) card.innerHTML = dashCardHtml(); }
 }
 function closeCustomerEditModal(){
   const el = document.getElementById("customer-edit-overlay");
   if(el) el.remove();
 }
-async function saveCustomerEdit(id){
+async function saveCustomerEdit(id, thenRemind){
   const patch = readCustomerFields("ce");
   if(!patch.name){ alert("أدخل اسم الزبون"); return; }
+  if(thenRemind && !String(patch.phone||"").replace(/\D/g,"")){ alert("اكتب رقم الهاتف أولًا."); const el = document.getElementById("ce-phone"); if(el) el.focus(); return; }
   const idx = state.customers.findIndex(x=>x.id===id);
   const backup = idx>=0 ? {...state.customers[idx]} : null;
   closeCustomerEditModal();
@@ -1691,6 +1704,8 @@ async function saveCustomerEdit(id){
     cacheData();
   }
   refreshCustomersTable();
+  refreshCustomerEverywhere(id);
+  if(thenRemind) sendReminder(id);
   const r = await api("editCustomer", {id, patch});
   if(r.networkError){
     queueOutbox("editCustomer", {id, patch});
@@ -1698,7 +1713,7 @@ async function saveCustomerEdit(id){
     return;
   }
   if(!r.ok){
-    if(backup && idx>=0){ state.customers[idx] = backup; cacheData(); refreshCustomersTable(); }
+    if(backup && idx>=0){ state.customers[idx] = backup; cacheData(); refreshCustomersTable(); refreshCustomerEverywhere(id); }
     alert(r.error || "تعذر حفظ التعديل");
     return;
   }
