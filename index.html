@@ -2216,8 +2216,13 @@ function sypValue(e){
 }
 // a USD payment with a rate is paid out of the Syrian-pound income (converted at that day's rate)
 function effOut(e){
-  if(e.currency==='USD' && e.rate>0) return {SYP:e.amount*e.rate, USD:0};
   return e.currency==='USD' ? {SYP:0, USD:e.amount} : {SYP:e.amount, USD:0};
+}
+// 2) Mohammed buys dollars with the lira he collected: a dollar handover leaves HIS box as lira (amount × rate)
+//    and enters Feras's box as dollars. Without a rate it can only leave as dollars.
+function handOutOfMohammed(e){
+  if(e.currency==='USD') return e.rate>0 ? {SYP:e.amount*e.rate, USD:0} : {SYP:0, USD:e.amount};
+  return {SYP:e.amount, USD:0};
 }
 
 // ---- subscriber payments helpers ----
@@ -2272,7 +2277,8 @@ function boxesData(){
     const out = { SYP:0, USD:0 };
     all.filter(e=>e.type!=='in' && boxOf(e)===b && inRange(e.date)).forEach(e=>{ const x = effOut(e); out.SYP += x.SYP; out.USD += x.USD; });
     const hand = all.filter(e=>isHandover(e) && inRange(e.date));
-    const handover = { SYP:sumExp(hand,'SYP'), USD:sumExp(hand,'USD') };
+    const handover = { SYP:0, USD:0 };
+    hand.forEach(e=>{ const x = b==='mohammed' ? handOutOfMohammed(e) : (e.currency==='USD' ? {SYP:0,USD:e.amount} : {SYP:e.amount,USD:0}); handover.SYP += x.SYP; handover.USD += x.USD; });
     const sign = b==='mohammed' ? -1 : 1;   // a handover leaves Mohammed's box and enters Feras's
     res[b] = {
       hasOpening: openings.length>0, cutoff, opening, collections, inOther, out, handover,
@@ -2664,7 +2670,8 @@ function ledgerFor(box){
     }
     const mv = boxMonthMoves(box, m);
     const inn = { SYP: mv.collections.reduce((x,p)=>x+p.amount,0) + sumCur(mv.handIn,"SYP") + sumCur(mv.otherIn,"SYP"), USD: sumCur(mv.handIn,"USD") + sumCur(mv.otherIn,"USD") };
-    const out = { SYP: sumCur(mv.handOut,"SYP"), USD: sumCur(mv.handOut,"USD") };
+    const out = { SYP:0, USD:0 };
+    mv.handOut.forEach(e=>{ const x = handOutOfMohammed(e); out.SYP += x.SYP; out.USD += x.USD; });
     mv.outs.forEach(e=>{ const x = effOut(e); out.SYP += x.SYP; out.USD += x.USD; });
     const expected = { SYP:start.SYP+inn.SYP-out.SYP, USD:start.USD+inn.USD-out.USD };
     const count = lastMonthCount(box, m);
@@ -2789,7 +2796,7 @@ function receiptsDetailsHtml(month){
     return `<div class="panel" style="margin-bottom:0">
       <h3>${box==="firas"?"صندوق فراس":"صندوق محمد"} — ${monthLabelOf(month)}</h3>
       ${line(box==="firas"?"حوالات مباشرة من المشتركين":"مقبوض من المشتركين", fmtMoney(coll), mv.collections.slice().sort((a,b)=>a.date.localeCompare(b.date)).map(p=>`<div class="legend-row" style="justify-content:space-between;font-size:12px"><span>${p.date} — ${escAttr(custName(p.customerId))} <span style="color:var(--muted)">(عن ${monthLabelOf(p.month)})</span></span><span>${fmtMoney(p.amount)}</span></div>`), "var(--accent)")}
-      ${box==="firas" ? line("مستلم من محمد", curTot(mv.handIn), mv.handIn.map(eItem), "var(--accent)") : line("مسلَّم لفراس", curTot(mv.handOut), mv.handOut.map(eItem), "var(--danger)")}
+      ${box==="firas" ? line("مستلم من محمد", curTot(mv.handIn), mv.handIn.map(eItem), "var(--accent)") : line("مسلَّم لفراس (بقيمته بالليرة)", (()=>{ let sy=0, us=0; mv.handOut.forEach(e=>{ const x = handOutOfMohammed(e); sy+=x.SYP; us+=x.USD; }); return (sy?fmtMoney(Math.round(sy)):"") + (sy&&us?" · ":"") + (us?us.toLocaleString("en-US")+" $":"") || fmtMoney(0); })(), mv.handOut.map(eItem), "var(--danger)")}
       ${line("واردات أخرى", curTot(mv.otherIn), mv.otherIn.map(eItem), "var(--accent)")}
       ${line("مدفوعات", curTot(mv.outs), mv.outs.map(eItem), "var(--danger)")}
     </div>`;
@@ -3028,6 +3035,10 @@ async function submitExpenseForm(){
   if(!expenseForm.amount || expenseForm.amount<=0){ alert("أدخل مبلغًا صحيحًا"); return; }
   if(expenseForm.type==='out' && expenseForm.currency==='USD' && !(expenseForm.rate>0)){
     alert("أدخل سعر الصرف يوم التسديد (ل.س لكل 1$) — مطلوب للمدفوعات بالدولار لحساب التكلفة بالليرة.");
+    return;
+  }
+  if(expenseForm.type==='in' && expenseForm.category===HANDOVER_CATEGORY && expenseForm.currency==='USD' && !(expenseForm.rate>0)){
+    alert("أدخل سعر الصرف الذي اشترى به محمد الدولار (ل.س لكل 1$).\nبه تُطرح قيمة الدولارات من ليرات محمد.");
     return;
   }
   const keepType = expenseForm.type;
