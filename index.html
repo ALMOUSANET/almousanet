@@ -269,7 +269,27 @@ input, select { background:var(--panel-2); border:1px solid var(--border); color
 @media (max-width:420px){
   .stat-grid{ grid-template-columns:1fr; }
 }
+#pdf-export{ display:none; }
 @media print {
+  body.pdf-exporting #root, body.pdf-exporting .modal-overlay, body.pdf-exporting #isp-toast{ display:none !important; }
+  body.pdf-exporting #pdf-export{ display:block; }
+  #pdf-export{ direction:rtl; color:#000; background:#fff; font-family:Tahoma, Arial, sans-serif; }
+  #pdf-export .pe-head{ display:flex; justify-content:space-between; align-items:flex-end; border-bottom:2px solid #000; padding-bottom:4px; margin-bottom:6px; }
+  #pdf-export .pe-title{ font-size:15px; font-weight:700; }
+  #pdf-export .pe-meta{ font-size:9.5px; }
+  #pdf-export h2{ font-size:12px; margin:10px 0 4px; }
+  #pdf-export table{ width:100%; border-collapse:collapse; table-layout:fixed; font-size:8.5px; }
+  #pdf-export thead{ display:table-header-group; }
+  #pdf-export tfoot{ display:table-row-group; }
+  #pdf-export tr{ page-break-inside:avoid; break-inside:avoid; }
+  #pdf-export th, #pdf-export td{ border:1px solid #777; padding:2px 3px; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #pdf-export th{ background:#e6e6e6 !important; color:#000 !important; font-weight:700; }
+  #pdf-export td{ color:#000; background:#fff; }
+  #pdf-export td.pe-name{ text-align:right; }
+  #pdf-export td.pe-un{ font-weight:700; }
+  #pdf-export td.pe-ns, #pdf-export td.pe-fu{ color:#666; }
+  #pdf-export tr.pe-total td{ font-weight:700; background:#f0f0f0; }
+  #pdf-export .pe-legend{ font-size:8.5px; margin-top:6px; }
   body{ background:#fff; color:#111; }
   .sidebar,.no-print{ display:none !important; }
   .main{ padding:0; }
@@ -1583,6 +1603,9 @@ function renderPayments(){
       </select>
     </div>
   </div>
+  <div class="no-print" style="display:flex;justify-content:flex-end;margin:-4px 0 10px">
+    <button class="btn secondary" onclick="exportPaymentsPdf()">📄 تصدير PDF</button>
+  </div>
   <div class="panel">
     <div style="color:var(--muted);font-size:12px;margin-bottom:10px">اضغط أي خلية لتسجيل مبلغ، أو "لم يدفع"، أو "غير مشترك" عن ذلك الشهر. الاسم وحساب المايكروتك ثابتان عند التمرير أفقيًا، ورأس الجدول ثابت عند التمرير لأسفل.</div>
     <div id="payments-grid-wrap">${renderPaymentsGridOnly()}</div>
@@ -1597,6 +1620,75 @@ function customerTotals(c){
   const overdueCount = rows.filter(r=>r.status==='unpaid').length;
   const lastStatus = rows.slice().reverse().find(r=>r.status!=='not_due_yet')?.status || 'unpaid';
   return { totalDebt, totalPaid, overdueCount, lastStatus };
+}
+
+// ======================= PDF EXPORT (payments, one year) =======================
+function pdfCell(r){
+  if(r.status==='paid') return { cls:"pe-pd", txt:(Number(r.amount)||0).toLocaleString("en-US") + (r.receivedBy==='firas' ? "*" : "") };
+  if(r.status==='not_subscribed') return { cls:"pe-ns", txt:"غ.م" };
+  if(r.status==='not_due_yet') return { cls:"pe-fu", txt:"—" };
+  return { cls:"pe-un", txt:"لم يدفع" };
+}
+function pdfTableHtml(list, year, withTotals){
+  const ms = yearMonths(year);
+  const monthSums = ms.map(()=>0);
+  let debtSum = 0;
+  const body = list.map((c,i)=>{
+    const rows = getStatementRows(c).filter(r=>r.year===year);
+    const debt = customerTotals(c).totalDebt;
+    debtSum += debt;
+    const cells = rows.map((r,j)=>{
+      if(r.status==='paid') monthSums[j] += Number(r.amount)||0;
+      const x = pdfCell(r);
+      return `<td class="${x.cls}">${x.txt}</td>`;
+    }).join("");
+    return `<tr><td>${i+1}</td><td class="pe-name">${escAttr(c.name)}</td><td>${escAttr(c.mikrotik||"—")}</td><td>${c.speed}M</td>${cells}<td class="${debt>0?'pe-un':''}">${debt.toLocaleString("en-US")}</td></tr>`;
+  }).join("");
+  const foot = withTotals ? `<tr class="pe-total"><td colspan="4">مجموع المحصّل لكل شهر</td>${monthSums.map(v=>`<td>${v.toLocaleString("en-US")}</td>`).join("")}<td>${debtSum.toLocaleString("en-US")}</td></tr>` : "";
+  return `<table>
+    <colgroup><col style="width:3%"><col style="width:15%"><col style="width:7%"><col style="width:4%">${ms.map(()=>`<col style="width:5.5%">`).join("")}<col style="width:5%"></colgroup>
+    <thead><tr><th>#</th><th>الاسم</th><th>الحساب</th><th>الباقة</th>${ms.map(m=>`<th>${m.label.split(" ")[0]}</th>`).join("")}<th>الدين</th></tr></thead>
+    <tbody>${body}${foot}</tbody></table>`;
+}
+function buildPaymentsPdfHtml(onlyShown){
+  const year = state.viewYear;
+  const byName = (a,b)=>(a.name||"").localeCompare(b.name||"", 'ar');
+  const active = onlyShown ? filteredGridCustomers() : enabledCustomers().slice().sort(byName);
+  const disabled = onlyShown ? [] : state.customers.filter(c=>c.active===false).slice().sort(byName);
+  const stale = state.dataStale ? ` · ⚠ نسخة محفوظة وليست محدّثة` : "";
+  return `
+    <div class="pe-head">
+      <div class="pe-title">شبكة الموسى للإنترنت — دفعات المشتركين ${year}</div>
+      <div class="pe-meta">تاريخ التصدير: ${todayStr()} · ${active.length} مشترك${onlyShown?" (المعروضون فقط)":""}${disabled.length?` · ${disabled.length} معطّل`:""}${stale}</div>
+    </div>
+    ${active.length ? pdfTableHtml(active, year, true) : `<div>لا يوجد مشتركون</div>`}
+    ${disabled.length ? `<h2>مشتركون معطّلون (${disabled.length}) — لا يدخلون في مجاميع الأشهر</h2>${pdfTableHtml(disabled, year, false)}` : ""}
+    <div class="pe-legend">المبالغ بالليرة السورية · لم يدفع = مستحق غير مدفوع · غ.م = غير مشترك · — = شهر لم يحن بعد · * = حُوّل مباشرة لفراس · عمود «الدين» = إجمالي المتأخر عبر كل السنوات</div>`;
+}
+function exportPaymentsPdf(){
+  const filtered = !!(state.paymentsSearch||"").trim() || (state.paymentsFilter||"all")!=="all";
+  let onlyShown = false;
+  if(filtered) onlyShown = !confirm("يوجد بحث أو فلتر مفعّل.\nموافق = تصدير كل المشتركين\nإلغاء = تصدير المعروضين فقط");
+  finishPdfExport();
+  const box = document.createElement("div");
+  box.id = "pdf-export";
+  box.innerHTML = buildPaymentsPdfHtml(onlyShown);
+  document.body.appendChild(box);
+  const pageStyle = document.createElement("style");
+  pageStyle.id = "pdf-export-page";
+  pageStyle.textContent = "@page{ size:A4 landscape; margin:8mm; }";
+  document.head.appendChild(pageStyle);
+  document.body.classList.add("pdf-exporting");
+  const prevTitle = document.title;
+  document.title = `دفعات-${state.viewYear}-${todayDateStr()}`;   // becomes the suggested PDF file name
+  const done = ()=>{ document.title = prevTitle; finishPdfExport(); window.removeEventListener("afterprint", done); };
+  window.addEventListener("afterprint", done);
+  setTimeout(()=>{ window.print(); }, 50);
+}
+function finishPdfExport(){
+  document.body.classList.remove("pdf-exporting");
+  const a = document.getElementById("pdf-export"); if(a) a.remove();
+  const b = document.getElementById("pdf-export-page"); if(b) b.remove();
 }
 
 function filteredGridCustomers(){
@@ -1806,7 +1898,7 @@ function renderStatementBody(customer){
   const otherYearsDue = allRows.filter(r=>r.status==='unpaid' && r.year!==state.viewYear).reduce((s,r)=>s+r.due,0);
   return `
   <div class="panel no-print" style="display:flex;gap:10px;flex-wrap:wrap">
-    <button class="btn" onclick="window.print()">طباعة / حفظ PDF</button>
+    <button class="btn" onclick="finishPdfExport(); window.print()">طباعة / حفظ PDF</button>
     <button class="btn secondary" onclick='sendStatementWA()'>إرسال عبر واتساب</button>
     ${unpaidCount>0?`<button class="btn secondary" onclick='payAllOverdueForCustomer(${JSON.stringify(customer.id)})'>دفع كل المتأخر (${unpaidCount}) دفعة واحدة</button>`:""}
   </div>
