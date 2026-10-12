@@ -349,6 +349,7 @@ let state = {
   expensesLastOk: 0,
   expensesLoadError: "",
   cashCounts: [],
+  finSettings: null,
   cashCountsError: "",
   lastBackup: "",
   lastBackupName: "",
@@ -683,7 +684,7 @@ function outboxBannerHtml(){
 // ---- cash-box (الصندوق المالي) local copy + pending changes ----
 const FIN_CACHE_KEY = 'isp_cache_fin';
 function cacheFin(){
-  try{ localStorage.setItem(FIN_CACHE_KEY, JSON.stringify({ expenses:state.expensesServer, counts:state.cashCounts, ts:Date.now() })); }catch(e){}
+  try{ localStorage.setItem(FIN_CACHE_KEY, JSON.stringify({ expenses:state.expensesServer, counts:state.cashCounts, fin:state.finSettings, ts:Date.now() })); }catch(e){}
 }
 function loadFinCache(){ try{ return JSON.parse(localStorage.getItem(FIN_CACHE_KEY)||'null'); }catch(e){ return null; } }
 // the list the page works with = what the server last told us + the changes still waiting in the queue
@@ -2318,7 +2319,7 @@ async function loadExpenses(silent){
   if(!state.expensesLoaded){
     const c = loadFinCache();                      // show the last known figures immediately (also when there is no internet)
     if(c){
-      state.expensesServer = c.expenses || []; state.cashCounts = c.counts || [];
+      state.expensesServer = c.expenses || []; state.cashCounts = c.counts || []; state.finSettings = c.fin || null;
       state.expensesLastOk = c.ts || 0; state.expensesLoaded = true; state.expensesStale = true;
       rebuildExpensesFromOutbox();
     }
@@ -2328,7 +2329,9 @@ async function loadExpenses(silent){
   if(r.ok){
     state.expensesServer = r.expenses || [];
     state.expensesLoaded = true; state.expensesStale = false; state.expensesLoadError = ""; state.expensesLastOk = Date.now();
-    const rc = await api("getCashCounts", {limit:30});
+    const rf = await api("getFinSettings", {});
+    if(rf.ok) state.finSettings = rf.settings || null;
+    const rc = await api("getCashCounts", {limit:1000});
     if(rc.ok){ state.cashCounts = rc.counts || []; state.cashCountsError = ""; }
     else if(rc.missingSheet){ state.cashCounts = []; state.cashCountsError = rc.error || ""; }
     cacheFin();
@@ -2572,12 +2575,18 @@ function renderExpenses(){
   <h1 class="page-title">الصندوق المالي</h1>
   ${finNotice}
 
+  ${finSetupPromptHtml()}
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin-bottom:18px">
-    ${boxCardHtml("المتبقي عند محمد (المحاسب)", boxes.mohammed, "mohammed")}
-    ${isAdmin ? boxCardHtml("صندوق فراس", boxes.firas, "firas") : ""}
+    ${finConfigured() ? ledgerBoxCardHtml("المتبقي عند محمد (المحاسب)", "mohammed") : boxCardHtml("المتبقي عند محمد (المحاسب)", boxes.mohammed, "mohammed")}
+    ${isAdmin ? (finConfigured() ? ledgerBoxCardHtml("صندوق فراس", "firas") : boxCardHtml("صندوق فراس", boxes.firas, "firas")) : ""}
   </div>
 
-  ${renderCashCountPanel()}
+  ${generalCountHtml()}
+  ${finConfigured() ? `<div class="panel"><h3>الجرد الشهري</h3>
+    ${ledgerTableHtml("صندوق محمد", "mohammed")}
+    ${isAdmin ? ledgerTableHtml("صندوق فراس", "firas") : ""}
+    ${collectionBreakTableHtml()}
+  </div>` : renderCashCountPanel()}
 
   <div class="form-row">
     <div>
@@ -2587,6 +2596,8 @@ function renderExpenses(){
       </select>
     </div>
   </div>
+
+  ${receiptsDetailsHtml(month)}
 
   <div class="stat-grid">
     <div class="stat-card accent"><div class="label">المحصّل من المشتركين في ${monthLabelOf(month)}</div><div class="value">${fmtMoney(isAdmin ? split.mohammed+split.firas : split.mohammed)}</div>
@@ -2606,6 +2617,240 @@ function renderExpenses(){
     ${totalsRows(groupTotals(monthIns, catLabel))}
   </div>
   `;
+}
+
+// ======================= MONTHLY CASH LEDGER (الجرد الشهري) =======================
+// Each box restarts every month from the previous month's end, corrected by the LAST cash count of that month.
+// Nothing before the start month the owner chose is used, so old mistakes never reach the balances.
+const ADJ_CATEGORY = "تسوية جرد";
+function finConfigured(){ return !!(state.finSettings && state.finSettings.configured && /^\d{4}-\d{2}$/.test(state.finSettings.startMonth)); }
+function monthKeysFrom(start, end){
+  const out = []; let y = Number(start.slice(0,4)), m = Number(start.slice(5,7)), g = 0;
+  while(g++ < 600){ const k = monthKeyOf(y,m); if(k > end) break; out.push(k); m++; if(m>12){ m=1; y++; } }
+  return out;
+}
+function prevMonthKey(k){ let y = Number(k.slice(0,4)), m = Number(k.slice(5,7)) - 1; if(m<1){ m=12; y--; } return monthKeyOf(y,m); }
+function lastMonthCount(box, month){
+  let best = null;
+  (state.cashCounts||[]).forEach(c=>{ if(c.box===box && c.month===month && (!best || (c.createdAt||"") > (best.createdAt||""))) best = c; });
+  return best;
+}
+// movements of one box in one month (also used for the receipts details)
+function boxMonthMoves(box, month){
+  const r = { collections:[], handIn:[], handOut:[], otherIn:[], outs:[] };
+  datedPayments().forEach(p=>{ if(p.by===box && p.date.slice(0,7)===month) r.collections.push(p); });
+  state.expensesList.forEach(e=>{
+    if((e.date||"").slice(0,7)!==month) return;
+    if(e.category===OPENING_CATEGORY || e.category===ADJ_CATEGORY) return;
+    if(isHandover(e)){ (box==="firas" ? r.handIn : r.handOut).push(e); return; }
+    if(boxOf(e)!==box) return;
+    (e.type==='in' ? r.otherIn : r.outs).push(e);
+  });
+  return r;
+}
+function sumCur(list, cur){ return list.filter(e=>(e.currency||"SYP")===cur).reduce((s,e)=>s+(Number(e.amount)||0),0); }
+function ledgerFor(box){
+  if(!finConfigured()) return [];
+  const s = state.finSettings;
+  const end = currentMonthKey < s.startMonth ? s.startMonth : currentMonthKey;
+  const rows = [];
+  let start = { SYP:Number(s.opening[box].SYP)||0, USD:Number(s.opening[box].USD)||0 };
+  monthKeysFrom(s.startMonth, end).forEach((m,i)=>{
+    let carriedUncounted = false;
+    if(i>0){
+      const p = rows[i-1];
+      start = { SYP:p.end.SYP, USD:p.end.USD };
+      carriedUncounted = !p.count;
+    }
+    const mv = boxMonthMoves(box, m);
+    const inn = { SYP: mv.collections.reduce((x,p)=>x+p.amount,0) + sumCur(mv.handIn,"SYP") + sumCur(mv.otherIn,"SYP"), USD: sumCur(mv.handIn,"USD") + sumCur(mv.otherIn,"USD") };
+    const out = { SYP: sumCur(mv.handOut,"SYP"), USD: sumCur(mv.handOut,"USD") };
+    mv.outs.forEach(e=>{ const x = effOut(e); out.SYP += x.SYP; out.USD += x.USD; });
+    const expected = { SYP:start.SYP+inn.SYP-out.SYP, USD:start.USD+inn.USD-out.USD };
+    const count = lastMonthCount(box, m);
+    const diff = count ? { SYP:count.diffSYP, USD:count.diffUSD } : null;
+    const endBal = { SYP: expected.SYP + (diff?diff.SYP:0), USD: expected.USD + (diff?diff.USD:0) };
+    // shortfall % of what was expected (negative = surplus)
+    const breakPct = (count && count.expectedSYP > 0) ? (-count.diffSYP / count.expectedSYP * 100) : null;
+    rows.push({ month:m, start, inn, out, expected, count, diff, end:endBal, breakPct, carriedUncounted, moves:mv });
+  });
+  return rows;
+}
+function collectionBreak(month){
+  const collected = revenueForMonth(month), missing = outstandingForMonth(month);
+  const due = collected + missing;
+  return { due, collected, missing, pct: due>0 ? missing/due*100 : null };
+}
+function pctTxt(p){ return p===null || p===undefined || isNaN(p) ? "—" : (Math.round(p*10)/10).toLocaleString("en-US") + "%"; }
+function moneyPair(v, showUSD){ return fmtMoney(Math.round(v.SYP)) + (showUSD && v.USD ? `<div style="color:var(--muted);font-size:11px">${Math.round(v.USD).toLocaleString("en-US")} $</div>` : ""); }
+function boxHasUSD(rows){ return rows.some(r=>r.start.USD||r.inn.USD||r.out.USD||(r.count&&(r.count.countedUSD||r.count.expectedUSD))); }
+
+function ledgerBoxCardHtml(title, box){
+  const rows = ledgerFor(box);
+  const cur = rows[rows.length-1];
+  if(!cur) return "";
+  const showUSD = boxHasUSD(rows);
+  const f = n => fmtMoney(Math.round(n));
+  return `
+  <div class="panel" style="margin-bottom:0">
+    <div class="section-heading"><h3>${title}</h3><span class="count-badge">جرد شهري منذ ${monthLabelOf(state.finSettings.startMonth)}</span></div>
+    <div class="stat-grid" style="margin-bottom:8px">
+      <div class="stat-card ${cur.end.SYP>=0?'accent':'danger'}"><div class="label">الرصيد الآن (ل.س)</div><div class="value">${f(cur.end.SYP)}</div></div>
+      ${showUSD ? `<div class="stat-card ${cur.end.USD>=0?'accent':'danger'}"><div class="label">بالدولار</div><div class="value">${Math.round(cur.end.USD).toLocaleString("en-US")} $</div></div>` : ""}
+    </div>
+    <div style="color:var(--muted);font-size:12px;line-height:1.9">بداية ${monthLabelOf(cur.month)} ${f(cur.start.SYP)} + مقبوض ${f(cur.inn.SYP)} − مدفوع ومسلَّم ${f(cur.out.SYP)}${cur.diff ? ` ${cur.diff.SYP<0?'−':'+'} فرق الجرد ${f(Math.abs(cur.diff.SYP))}` : ""}</div>
+    ${cur.carriedUncounted ? `<div style="background:var(--warn-dim);color:var(--warn);font-size:12px;padding:7px 9px;border-radius:7px;margin-top:8px">⚠ ${monthLabelOf(prevMonthKey(cur.month))} لم يُجرَد، فبداية هذا الشهر محسوبة وليست مجرودة.</div>` : ""}
+    <div style="margin-top:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button class="btn secondary small" onclick='openCashCountModal(${JSON.stringify(box)}, ${JSON.stringify(cur.month)})'>جرد ${monthLabelOf(cur.month)}</button>
+      <span style="font-size:12px">${cur.count ? `<span style="color:${cur.diff.SYP===0&&cur.diff.USD===0?'var(--accent)':'var(--warn)'}">آخر جرد ${cur.count.date}: ${diffText(cur.diff.SYP, cur.diff.USD)}</span>` : `<span style="color:var(--muted)">لم يُجرَد هذا الشهر بعد</span>`}</span>
+    </div>
+  </div>`;
+}
+
+function ledgerTableHtml(title, box){
+  const rows = ledgerFor(box);
+  if(!rows.length) return "";
+  const showUSD = boxHasUSD(rows);
+  const canCount = box==="mohammed" || state.user.role==="admin";
+  return `
+  <h3 style="margin:10px 0 6px;font-size:14px">${title}</h3>
+  <div style="overflow-x:auto"><table style="min-width:760px">
+    <thead><tr><th>الشهر</th><th>بداية الشهر</th><th>المقبوض</th><th>المدفوع والمسلَّم</th><th>المتوقع</th><th>الجرد الفعلي</th><th>الفرق</th><th>كسر الصندوق</th><th></th></tr></thead>
+    <tbody>${rows.slice().reverse().map(r=>{
+      const bad = r.diff && (r.diff.SYP!==0 || r.diff.USD!==0);
+      return `<tr>
+        <td>${monthLabelOf(r.month)}${r.carriedUncounted?`<div style="color:var(--warn);font-size:11px">بداية غير مجرودة</div>`:""}</td>
+        <td>${moneyPair(r.start, showUSD)}</td>
+        <td style="color:var(--accent)">${moneyPair(r.inn, showUSD)}</td>
+        <td style="color:var(--danger)">${moneyPair(r.out, showUSD)}</td>
+        <td>${moneyPair(r.expected, showUSD)}</td>
+        <td>${r.count ? moneyPair({SYP:r.count.countedSYP, USD:r.count.countedUSD}, showUSD) + `<div style="color:var(--muted);font-size:11px">${r.count.date} · ${escAttr(r.count.countedBy||"")}</div>` : `<span style="color:var(--muted)">لم يُجرَد</span>`}</td>
+        <td style="color:${!r.diff?'var(--muted)':(bad?'var(--warn)':'var(--accent)')};font-weight:${bad?700:400}">${r.diff ? diffText(r.diff.SYP, r.diff.USD) : "—"}</td>
+        <td style="font-weight:700;color:${r.breakPct>0?'var(--danger)':'inherit'}">${r.breakPct===null ? "—" : (r.breakPct<0 ? "زيادة "+pctTxt(-r.breakPct) : pctTxt(r.breakPct))}</td>
+        <td class="action-cell">${canCount ? `<button class="btn secondary small" onclick='openCashCountModal(${JSON.stringify(box)}, ${JSON.stringify(r.month)})'>${r.count?"إعادة الجرد":"جرد"}</button>` : ""}</td>
+      </tr>`;}).join("")}</tbody></table></div>`;
+}
+
+function collectionBreakTableHtml(){
+  if(!finConfigured()) return "";
+  const keys = monthKeysFrom(state.finSettings.startMonth, currentMonthKey < state.finSettings.startMonth ? state.finSettings.startMonth : currentMonthKey);
+  return `
+  <h3 style="margin:14px 0 6px;font-size:14px">كسر التحصيل (ما لم يُدفع من مستحق كل شهر)</h3>
+  <div style="overflow-x:auto"><table style="min-width:520px">
+    <thead><tr><th>الشهر</th><th>المستحق</th><th>المحصّل</th><th>غير المحصّل</th><th>كسر التحصيل</th></tr></thead>
+    <tbody>${keys.slice().reverse().map(m=>{ const c = collectionBreak(m); return `<tr>
+      <td>${monthLabelOf(m)}</td><td>${fmtMoney(c.due)}</td><td style="color:var(--accent)">${fmtMoney(c.collected)}</td>
+      <td style="color:var(--danger)">${fmtMoney(c.missing)}</td><td style="font-weight:700;color:${c.pct>0?'var(--danger)':'inherit'}">${pctTxt(c.pct)}</td></tr>`; }).join("")}</tbody></table></div>
+  <div style="color:var(--muted);font-size:11.5px;margin-top:4px">المحصّل هنا = دفعات الشهر نفسه، حتى لو دُفعت لاحقًا. فكسر الشهر يقل كلما سُدّدت ديونه.</div>`;
+}
+
+function generalCountHtml(){
+  if(!finConfigured()) return "";
+  const isAdmin = state.user.role==="admin";
+  const boxes = isAdmin ? ["mohammed","firas"] : ["mohammed"];
+  const keys = monthKeysFrom(state.finSettings.startMonth, currentMonthKey < state.finSettings.startMonth ? state.finSettings.startMonth : currentMonthKey);
+  let due = 0, missing = 0;
+  keys.forEach(m=>{ const c = collectionBreak(m); due += c.due; missing += c.missing; });
+  const cards = boxes.map(b=>{
+    const rows = ledgerFor(b);
+    const tot = rows.reduce((a,r)=>({ inn:a.inn+r.inn.SYP, out:a.out+r.out.SYP, short:a.short+(r.diff&&r.diff.SYP<0?-r.diff.SYP:0), plus:a.plus+(r.diff&&r.diff.SYP>0?r.diff.SYP:0), exp:a.exp+(r.count?r.count.expectedSYP:0), counted:a.counted+(r.count?1:0) }), {inn:0,out:0,short:0,plus:0,exp:0,counted:0});
+    const cur = rows[rows.length-1];
+    const netDiff = tot.plus - tot.short;
+    return `<div class="stat-card"><div class="label">${b==="firas"?"صندوق فراس":"صندوق محمد"}</div>
+      <div class="value" style="font-size:20px">${fmtMoney(Math.round(cur.end.SYP))}</div>
+      <div class="sub" style="line-height:1.8">بداية ${fmtMoney(Number(state.finSettings.opening[b].SYP)||0)} · مقبوض ${fmtMoney(tot.inn)} · مدفوع ${fmtMoney(Math.round(tot.out))}<br/>
+      فروقات الجرد: ${netDiff===0?"لا يوجد":(netDiff<0?"عجز "+fmtMoney(-netDiff):"زيادة "+fmtMoney(netDiff))} · كسر الصندوق ${tot.exp>0?pctTxt(tot.short/tot.exp*100):"—"}<br/>
+      ${tot.counted}/${rows.length} شهر مجرود</div></div>`;
+  }).join("");
+  return `
+  <div class="panel">
+    <div class="section-heading"><h3>الجرد العام — منذ ${monthLabelOf(state.finSettings.startMonth)}</h3>${isAdmin?`<button class="btn secondary small" onclick="openFinSettingsModal()">⚙ تعديل البداية</button>`:""}</div>
+    <div class="stat-grid">
+      ${cards}
+      <div class="stat-card"><div class="label">كسر التحصيل العام</div><div class="value" style="font-size:20px;color:${missing>0?'var(--danger)':'inherit'}">${pctTxt(due>0?missing/due*100:null)}</div>
+        <div class="sub">غير محصّل ${fmtMoney(missing)} من مستحق ${fmtMoney(due)}</div></div>
+    </div>
+    <div style="color:var(--muted);font-size:11.5px">كسر الصندوق = مجموع العجز ÷ مجموع المتوقع في الأشهر المجرودة. كل ما قبل ${monthLabelOf(state.finSettings.startMonth)} غير محسوب.</div>
+  </div>`;
+}
+
+function receiptsDetailsHtml(month){
+  if(!finConfigured() || month < state.finSettings.startMonth) return "";
+  const isAdmin = state.user.role==="admin";
+  const custName = id => (state.customers.find(c=>c.id===id)||{}).name || id;
+  const block = (box)=>{
+    const mv = boxMonthMoves(box, month);
+    const coll = mv.collections.reduce((s,p)=>s+p.amount,0);
+    const line = (label, total, items, color) => `
+      <details style="margin:4px 0"><summary style="cursor:pointer;display:flex;justify-content:space-between;gap:8px"><span>${label} (${items.length})</span><b style="color:${color}">${total}</b></summary>
+        <div style="padding:4px 10px 8px">${items.length ? items.join("") : `<div class="empty" style="padding:6px">لا يوجد</div>`}</div></details>`;
+    const eItem = e => `<div class="legend-row" style="justify-content:space-between;font-size:12px"><span>${e.date} — ${escAttr(catLabel(e))}${e.notes?` · <span style="color:var(--muted)">${escAttr(e.notes)}</span>`:""}</span><span>${fmtCurrency(e.amount, e.currency)}${e.currency==='USD'&&e.rate>0?` ≈ ${fmtMoney(e.amount*e.rate)}`:""}</span></div>`;
+    const curTot = list => { const s = sumCur(list,"SYP"), u = sumCur(list,"USD"); return (s?fmtMoney(s):"") + (s&&u?" · ":"") + (u?u.toLocaleString("en-US")+" $":"") || fmtMoney(0); };
+    return `<div class="panel" style="margin-bottom:0">
+      <h3>${box==="firas"?"صندوق فراس":"صندوق محمد"} — ${monthLabelOf(month)}</h3>
+      ${line(box==="firas"?"حوالات مباشرة من المشتركين":"مقبوض من المشتركين", fmtMoney(coll), mv.collections.slice().sort((a,b)=>a.date.localeCompare(b.date)).map(p=>`<div class="legend-row" style="justify-content:space-between;font-size:12px"><span>${p.date} — ${escAttr(custName(p.customerId))} <span style="color:var(--muted)">(عن ${monthLabelOf(p.month)})</span></span><span>${fmtMoney(p.amount)}</span></div>`), "var(--accent)")}
+      ${box==="firas" ? line("مستلم من محمد", curTot(mv.handIn), mv.handIn.map(eItem), "var(--accent)") : line("مسلَّم لفراس", curTot(mv.handOut), mv.handOut.map(eItem), "var(--danger)")}
+      ${line("واردات أخرى", curTot(mv.otherIn), mv.otherIn.map(eItem), "var(--accent)")}
+      ${line("مدفوعات", curTot(mv.outs), mv.outs.map(eItem), "var(--danger)")}
+    </div>`;
+  };
+  return `
+  <div class="section-heading" style="margin-top:6px"><h3>معلومات الاستلام والصرف — ${monthLabelOf(month)}</h3></div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin-bottom:18px">
+    ${block("mohammed")}${isAdmin ? block("firas") : ""}
+  </div>`;
+}
+
+function finSetupPromptHtml(){
+  if(finConfigured()) return "";
+  if(state.user.role!=="admin") return `<div class="panel"><div class="empty">لم يبدأ المدير الجرد الشهري بعد.</div></div>`;
+  return `<div class="panel" style="border-color:var(--warn)">
+    <h3>ابدأ الجرد الشهري</h3>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:10px">اختر شهر البداية وأدخل ما كان فعليًا بيد محمد وبيدك أول ذلك الشهر. من بعده يُحسب كل صندوق شهرًا بشهر، وكل ما قبله لا يدخل في الحساب.</div>
+    <button class="btn" onclick="openFinSettingsModal()">⚙ بدء الجرد الشهري</button>
+  </div>`;
+}
+function openFinSettingsModal(){
+  const s = state.finSettings || {};
+  const o = (s.opening||{});
+  const val = (b,c) => (o[b] && o[b][c]) ? o[b][c] : "";
+  const startDef = s.startMonth || currentMonthKey;
+  closeFinSettingsModal();
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.id = "finsettings-overlay";
+  overlay.innerHTML = `
+    <div class="modal-box stack-form">
+      <h3>${finConfigured() ? "تعديل بداية الجرد الشهري" : "بدء الجرد الشهري"}</h3>
+      <div class="form-row"><div><label>شهر البداية</label>
+        <select id="fs-month">${ALL_MONTHS.slice().reverse().map(m=>`<option value="${m.key}" ${m.key===startDef?'selected':''}>${m.label}</option>`).join("")}</select></div></div>
+      <div style="font-size:12.5px;color:var(--muted);margin:4px 0 8px">المبالغ الموجودة فعليًا أول هذا الشهر:</div>
+      <div class="form-row"><div><label>بيد محمد (ل.س)</label><input id="fs-m-syp" type="number" value="${val("mohammed","SYP")}" /></div></div>
+      <div class="form-row"><div><label>بيد محمد ($)</label><input id="fs-m-usd" type="number" value="${val("mohammed","USD")}" /></div></div>
+      <div class="form-row"><div><label>بيدك أنت (ل.س)</label><input id="fs-f-syp" type="number" value="${val("firas","SYP")}" /></div></div>
+      <div class="form-row"><div><label>بيدك أنت ($)</label><input id="fs-f-usd" type="number" value="${val("firas","USD")}" /></div></div>
+      <div class="modal-actions">
+        <button class="btn" onclick="saveFinSettings()">حفظ</button>
+        <button class="btn secondary" onclick="closeFinSettingsModal()">إلغاء</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+function closeFinSettingsModal(){ const el = document.getElementById("finsettings-overlay"); if(el) el.remove(); }
+async function saveFinSettings(){
+  const g = id => document.getElementById(id);
+  const payload = {
+    startMonth: g("fs-month").value,
+    mohammedSYP: Number(g("fs-m-syp").value)||0, mohammedUSD: Number(g("fs-m-usd").value)||0,
+    firasSYP: Number(g("fs-f-syp").value)||0, firasUSD: Number(g("fs-f-usd").value)||0,
+  };
+  if(!/^\d{4}-\d{2}$/.test(payload.startMonth)){ alert("اختر شهر البداية"); return; }
+  closeFinSettingsModal();
+  const r = await api("setFinSettings", payload);
+  if(r.networkError){ alert("لا يوجد اتصال بالإنترنت — لم يُحفظ الإعداد."); return; }
+  if(!r.ok){ alert(r.error || "تعذر الحفظ"); return; }
+  showToast("تم ✓");
+  await loadExpenses(true);
 }
 
 // ======================= CASH COUNT (جرد الصندوق) =======================
@@ -2641,34 +2886,47 @@ function renderCashCountPanel(){
         <td>${fmtMoney(c.expectedSYP)}${c.expectedUSD?`<div style="color:var(--muted);font-size:11px">${c.expectedUSD.toLocaleString("en-US")} $</div>`:""}</td>
         <td style="color:${!bad?"var(--accent)":(c.settled?"var(--muted)":"var(--warn)")};font-weight:700">${diffText(c.diffSYP, c.diffUSD)}${c.notes?`<div style="color:var(--muted);font-size:11px;font-weight:400">${escAttr(c.notes)}</div>`:""}</td>
         <td>${escAttr(c.countedBy)}</td>
-        <td class="action-cell">${c.settled ? '<span class="pill">سُوّي</span>' : (bad && isAdmin ? `<button class="btn secondary small" onclick='settleCount(${JSON.stringify(c.id)})'>تسوية الفرق</button>` : "")}</td>
+        <td class="action-cell">${c.settled ? '<span class="pill">سُوّي</span>' : (bad && isAdmin && !finConfigured() ? `<button class="btn secondary small" onclick='settleCount(${JSON.stringify(c.id)})'>تسوية الفرق</button>` : "")}</td>
       </tr>`;}).join("")}</tbody></table>`}
   </div>`;
 }
 
-function openCashCountModal(box){
+function openCashCountModal(box, month){
   const pend = state.expensesList.filter(e=>e.pending).length + getOutbox().filter(i=>i.action==="setPaymentStatus" && isMine(i)).length;
   if(state.expensesStale || pend>0){
     alert("لا يمكن الجرد الآن: " + (pend>0 ? "توجد تغييرات بانتظار المزامنة" : "بيانات الصندوق غير محدّثة (لا يوجد اتصال)") + ".\nالجرد يقارن المبلغ الفعلي بالمتوقع، ويجب أن يكون المتوقع محدّثًا. انتظر حتى تتم المزامنة ثم أعد المحاولة.");
     return;
   }
-  const d = boxesData()[box];
-  const showUSD = d.hasUSD || d.usd!==0;
-  const expSYP = Math.round(d.syp), expUSD = Math.round(d.usd);
+  let expSYP, expUSD, showUSD, title;
+  if(finConfigured()){
+    month = month || currentMonthKey;
+    const rows = ledgerFor(box);
+    const row = rows.find(r=>r.month===month);
+    if(!row){ alert("هذا الشهر قبل بداية الجرد الشهري."); return; }
+    expSYP = Math.round(row.expected.SYP); expUSD = Math.round(row.expected.USD);
+    showUSD = boxHasUSD(rows) || expUSD!==0;
+    title = ` — ${monthLabelOf(month)}`;
+  } else {
+    month = "";
+    const d = boxesData()[box];
+    showUSD = d.hasUSD || d.usd!==0;
+    expSYP = Math.round(d.syp); expUSD = Math.round(d.usd); title = "";
+  }
   closeCashCountModal();
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay";
   overlay.id = "cashcount-overlay";
   overlay.innerHTML = `
     <div class="modal-box stack-form">
-      <h3>جرد ${box==="firas" ? "صندوق فراس" : "صندوق محمد"}</h3>
+      <h3>جرد ${box==="firas" ? "صندوق فراس" : "صندوق محمد"}${title}</h3>
+      ${month && month < currentMonthKey ? `<div style="font-size:12px;color:var(--warn);margin-bottom:6px">جرد شهر سابق: أدخل المبلغ الذي كان موجودًا فعليًا آخر ${monthLabelOf(month)}.</div>` : ""}
       <div style="color:var(--muted);font-size:13px;margin-bottom:8px">المتوقع حسب الحركات: <b>${fmtMoney(expSYP)}</b>${showUSD ? ` · <b>${expUSD.toLocaleString("en-US")} $</b>` : ""}</div>
       <div class="form-row"><div><label>المبلغ الفعلي الموجود الآن (ل.س)</label><input id="cc-syp" type="number" oninput="updateCountDiff(${expSYP},${expUSD})" /></div></div>
       ${showUSD ? `<div class="form-row"><div><label>المبلغ الفعلي بالدولار ($)</label><input id="cc-usd" type="number" oninput="updateCountDiff(${expSYP},${expUSD})" /></div></div>` : ""}
       <div id="cc-diff" style="font-size:13.5px;font-weight:700;margin:6px 0 10px"></div>
       <div class="form-row"><div><label>ملاحظات (اختياري)</label><input id="cc-notes" /></div></div>
       <div class="modal-actions">
-        <button class="btn" onclick='saveCashCount(${JSON.stringify(box)},${expSYP},${expUSD})'>حفظ الجرد</button>
+        <button class="btn" onclick='saveCashCount(${JSON.stringify(box)},${expSYP},${expUSD},${JSON.stringify(month)})'>حفظ الجرد</button>
         <button class="btn secondary" onclick="closeCashCountModal()">إلغاء</button>
       </div>
     </div>`;
@@ -2690,7 +2948,7 @@ function updateCountDiff(expSYP, expUSD){
   out.style.color = (dS===0 && dU===0) ? "var(--accent)" : "var(--warn)";
   out.textContent = diffText(dS, dU);
 }
-async function saveCashCount(box, expSYP, expUSD){
+async function saveCashCount(box, expSYP, expUSD, month){
   const sEl = document.getElementById("cc-syp");
   if(!sEl || sEl.value===""){ alert("أدخل المبلغ الفعلي بالليرة"); return; }
   const uEl = document.getElementById("cc-usd");
@@ -2699,6 +2957,7 @@ async function saveCashCount(box, expSYP, expUSD){
     countedUSD: (uEl && uEl.value!=="") ? (Number(uEl.value)||0) : expUSD,
     expectedSYP: expSYP, expectedUSD: expUSD,
     notes: (document.getElementById("cc-notes")?.value || "").trim(),
+    month: month || "",
   };
   closeCashCountModal();
   const r = await api("saveCashCount", payload);
