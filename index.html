@@ -199,6 +199,22 @@ tr:last-child td { border-bottom:none; }
   min-width:110px; max-width:110px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
 #payments-grid-wrap th.col-sticky-1 { z-index:4; }
+#payments-grid-wrap td.debt-cell { min-width:118px; white-space:nowrap; }
+.row-acts { display:flex; gap:4px; margin-top:4px; }
+.row-acts button { font-size:11px; padding:2px 7px; border-radius:6px; border:1px solid var(--border); background:var(--panel-2, transparent); color:var(--text); cursor:pointer; line-height:1.5; }
+.row-acts button.wa { border-color:#2fa960; color:#2fa960; }
+.row-acts button.off { opacity:.45; }
+.follow-mini { font-size:10.5px; line-height:1.5; margin-top:3px; white-space:normal; color:var(--muted); }
+.dash-search { position:relative; margin-bottom:16px; }
+.dash-search input { width:100%; font-size:15px; padding:10px 12px; }
+.dash-results { position:absolute; top:100%; right:0; left:0; z-index:30; background:var(--panel); border:1px solid var(--border); border-radius:8px; margin-top:4px; max-height:320px; overflow-y:auto; box-shadow:0 8px 24px rgba(0,0,0,.25); }
+.dash-results .item { padding:9px 12px; cursor:pointer; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; gap:8px; }
+.dash-results .item:last-child { border-bottom:none; }
+.dash-results .item:hover, .dash-results .item.active { background:var(--accent-dim, rgba(56,201,143,.12)); }
+.dash-results .sub { color:var(--muted); font-size:12px; }
+.dash-card .acts { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+.dash-card .kv { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:8px 16px; font-size:13px; }
+.dash-card .kv b { display:block; font-size:11.5px; color:var(--muted); font-weight:400; }
 .pill { display:inline-block; padding:2px 9px; border-radius:999px; font-size:12px; }
 .pill.ok { background:var(--accent-dim); color:var(--accent); }
 .pill.late { background:var(--danger-dim); color:var(--danger); }
@@ -790,14 +806,15 @@ function getStatementRows(customer){
   });
 }
 
+function statsFor(c){
+  const rows = getStatementRows(c);
+  const unpaidRows = rows.filter(r=>r.status==='unpaid');
+  const lateNow = unpaidRows.some(r=>r.key===currentMonthKey);
+  const debtAmount = unpaidRows.length * priceFor(c.speed);
+  return {...c, unpaidCount:unpaidRows.length, lateNow, unpaidMonths:unpaidRows, debtAmount, allRows:rows};
+}
 function customerStatsList(){
-  return enabledCustomers().map(c=>{
-    const rows = getStatementRows(c);
-    const unpaidRows = rows.filter(r=>r.status==='unpaid');
-    const lateNow = unpaidRows.some(r=>r.key===currentMonthKey);
-    const debtAmount = unpaidRows.length * priceFor(c.speed);
-    return {...c, unpaidCount:unpaidRows.length, lateNow, unpaidMonths:unpaidRows, debtAmount, allRows:rows};
-  });
+  return enabledCustomers().map(statsFor);
 }
 
 function dashboardData(){
@@ -1196,11 +1213,107 @@ function renderUsers(){
 }
 
 // ======================= DASHBOARD =======================
+// ---- dashboard search ----
+if(state.dashSearch === undefined) state.dashSearch = "";
+if(state.dashPick === undefined) state.dashPick = null;
+let dashActive = 0;
+function dashMatches(term){
+  if(!normAr(term)) return [];
+  const list = state.customers.filter(c => matchesSearch([c.name, c.mikrotik, c.phone, String(c.phone||"").replace(/\D/g,"")], term));
+  list.sort((a,b)=> (a.active===false) - (b.active===false) || (a.name||"").localeCompare(b.name||"", 'ar'));
+  return list.slice(0, 8);
+}
+function onDashSearchInput(v){
+  state.dashSearch = v;
+  dashActive = 0;
+  renderDashResults();
+}
+function renderDashResults(){
+  const box = document.getElementById("dash-results");
+  if(!box) return;
+  const term = state.dashSearch || "";
+  if(!normAr(term)){ box.innerHTML = ""; box.className = ""; return; }
+  const list = dashMatches(term);
+  box.className = "dash-results";
+  box.innerHTML = list.length ? list.map((c,i)=>{
+    const t = customerTotals(c);
+    return `<div class="item ${i===dashActive?'active':''}" onmousedown='event.preventDefault(); pickDashCustomer(${JSON.stringify(c.id)})'>
+      <div><div>${escAttr(c.name)}${c.active===false?' <span class="pill">معطّل</span>':''}</div><div class="sub">${escAttr(c.mikrotik||"—")}${c.phone?' · '+escAttr(c.phone):''}</div></div>
+      <div class="sub" style="color:${t.totalDebt>0?'var(--danger)':'var(--muted)'}">${t.totalDebt>0?fmtMoney(t.totalDebt):'لا دين'}</div>
+    </div>`;
+  }).join("") : `<div class="item"><span class="sub">لا يوجد مشترك مطابق</span></div>`;
+}
+function onDashSearchKey(e){
+  const list = dashMatches(state.dashSearch||"");
+  if(e.key==="ArrowDown"){ dashActive = Math.min(dashActive+1, list.length-1); renderDashResults(); e.preventDefault(); }
+  else if(e.key==="ArrowUp"){ dashActive = Math.max(dashActive-1, 0); renderDashResults(); e.preventDefault(); }
+  else if(e.key==="Enter" && list[dashActive]){ pickDashCustomer(list[dashActive].id); e.preventDefault(); }
+  else if(e.key==="Escape"){ state.dashSearch=""; renderDashResults(); }
+}
+function pickDashCustomer(id){
+  state.dashPick = id;
+  state.dashSearch = "";
+  const inp = document.getElementById("dash-search-input"); if(inp){ inp.value = ""; inp.blur && inp.blur(); }
+  renderDashResults();
+  const card = document.getElementById("dash-card"); if(card) card.innerHTML = dashCardHtml();
+}
+function closeDashCard(){
+  state.dashPick = null;
+  const card = document.getElementById("dash-card"); if(card) card.innerHTML = "";
+}
+function dashCardHtml(){
+  const base = state.customers.find(c=>c.id===state.dashPick);
+  if(!base) return "";
+  const c = statsFor(base);
+  const lastPaid = c.allRows.filter(r=>r.status==='paid').pop();
+  const curRow = c.allRows.find(r=>r.key===currentMonthKey);
+  const curTxt = !curRow ? "—" : curRow.status==='paid' ? `مدفوع (${fmtMoney(curRow.amount)})` : curRow.status==='not_subscribed' ? "غير مشترك" : "لم يدفع";
+  const follow = followUpHtmlRaw(base);
+  const months = c.unpaidMonths.map(r=>r.label).join("، ");
+  return `
+  <div class="panel dash-card">
+    <div class="section-heading"><h3>${escAttr(c.name)}${c.active===false?' <span class="pill">معطّل</span>':''}</h3>
+      <button class="btn secondary small" onclick="closeDashCard()">✕ إغلاق</button></div>
+    <div class="kv">
+      <div><b>حساب المايكروتك</b>${escAttr(c.mikrotik||"—")}</div>
+      <div><b>الباقة</b>${c.speed} ميغا — ${fmtMoney(priceFor(c.speed))}</div>
+      <div><b>الهاتف</b>${escAttr(c.phone||"—")}</div>
+      <div><b>مشترك منذ</b>${monthLabelOf(c.joinMonth)}</div>
+      <div><b>الشهر الحالي</b><span style="color:${curRow&&curRow.status==='unpaid'?'var(--danger)':'inherit'}">${curTxt}</span></div>
+      <div><b>آخر دفعة</b>${lastPaid ? `${lastPaid.label} (${fmtMoney(lastPaid.amount)})` : "لا توجد"}</div>
+      <div><b>الدين الكلي</b><span style="color:${c.debtAmount>0?'var(--danger)':'var(--accent)'};font-weight:700">${c.debtAmount>0 ? fmtMoney(c.debtAmount)+` — ${c.unpaidCount} ${c.unpaidCount===1?'شهر':'أشهر'}` : "لا يوجد دين ✓"}</span></div>
+    </div>
+    ${c.unpaidCount ? `<div style="font-size:12px;color:var(--muted);margin-top:8px">الأشهر المتأخرة: ${months}</div>` : ""}
+    ${follow ? `<div style="font-size:12px;margin-top:6px;line-height:1.7">${follow}</div>` : ""}
+    <div class="acts">
+      <button class="btn" onclick='openGridCellModal(${JSON.stringify(c.id)}, currentMonthKey)'>تسجيل دفعة ${monthLabelOf(currentMonthKey)}</button>
+      <button class="btn secondary" onclick='openStatementFor(${JSON.stringify(c.id)})'>كشف حساب</button>
+      ${c.debtAmount>0 ? `<button class="btn secondary" onclick='sendReminder(${JSON.stringify(c.id)})'>💬 تذكير واتساب</button><button class="btn secondary" onclick='openPromiseModal(${JSON.stringify(c.id)})'>🤝 وعد</button>` : ""}
+    </div>
+  </div>`;
+}
+function openStatementFor(id){
+  state.statementCustomerId = id;
+  setView("statement");
+}
+function goRemindDebtors(){
+  state.paymentsFilter = "has_debt";
+  state.paymentsSort = "most_debt";
+  state.paymentsSearch = "";
+  setView("payments");
+}
+
 function renderDashboard(){
   const d = dashboardData();
   const disabledCount = state.customers.length - enabledCustomers().length;
   return `
   <h1 class="page-title">نظرة عامة — ${months[months.length-1].label}</h1>
+  <div class="dash-search">
+    <input id="dash-search-input" value="${escAttr(state.dashSearch||"")}" placeholder="🔍 ابحث عن مشترك بالاسم أو الحساب أو الهاتف..." autocomplete="off"
+      oninput="onDashSearchInput(this.value)" onkeydown="onDashSearchKey(event)" onfocus="onDashSearchInput(this.value)" />
+    <div id="dash-results"></div>
+  </div>
+  <div id="dash-card">${dashCardHtml()}</div>
   <div class="stat-grid">
     <div class="stat-card"><div class="label">إجمالي الزبائن النشطين</div><div class="value">${enabledCustomers().length}</div>
       <div class="sub">${d.newThisMonth>0?`+${d.newThisMonth} هذا الشهر`:"لا يوجد اشتراكات جديدة"} · ${disabledCount} معطّل</div></div>
@@ -1223,28 +1336,26 @@ function renderDashboard(){
   <div class="panel"><h3>توزيع المتأخرين حسب عدد أشهر التراكم</h3>${renderAgingBars(debtAgingData())}</div>
 
   <div class="panel">
-    <div class="section-heading"><h3>متأخرون عن دفع الشهر الحالي</h3><span class="count-badge">${d.lateNowList.length} زبون</span></div>
+    <div class="section-heading"><h3>متأخرون عن دفع الشهر الحالي</h3><span style="display:flex;gap:8px;align-items:center"><span class="count-badge">${d.lateNowList.length} زبون</span>${d.lateNowList.length?`<button class="btn secondary small" onclick="goRemindDebtors()">💬 التذكير من صفحة الدفعات ←</button>`:""}</span></div>
     ${d.lateNowList.length===0 ? `<div class="empty">لا يوجد متأخرون هذا الشهر</div>` : `
-    <table><thead><tr><th>الاسم</th><th>حساب المايكروتك</th><th>الهاتف</th><th>الباقة</th><th>المتراكم</th><th>المتابعة</th><th></th></tr></thead>
+    <table><thead><tr><th>الاسم</th><th>حساب المايكروتك</th><th>الهاتف</th><th>الباقة</th><th>المتراكم</th><th>المتابعة</th></tr></thead>
     <tbody>${d.lateNowList.map(c=>`
       <tr><td>${c.name}</td><td>${c.mikrotik||"—"}</td><td>${c.phone}</td>
       <td>${c.speed} ميغا <span class="pill late">${c.unpaidCount} شهر</span></td>
       <td>${fmtMoney(c.debtAmount)}</td>
-      <td class="follow-cell" data-follow="${c.id}" style="font-size:11.5px;line-height:1.7">${followUpHtml(c)}</td>
-      <td class="action-cell"><button class="btn small" onclick='sendReminder(${JSON.stringify(c.id)})'>تذكير واتساب</button><button class="btn secondary small" onclick='openPromiseModal(${JSON.stringify(c.id)})'>وعد</button></td></tr>
+      <td class="follow-cell" data-follow="${c.id}" style="font-size:11.5px;line-height:1.7">${followUpHtml(c)}</td></tr>
     `).join("")}</tbody></table>`}
   </div>
 
   <div class="panel">
-    <div class="section-heading"><h3>زبائن عليهم ديون متراكمة (شهرين فأكثر)</h3><span class="count-badge">${d.debtorsList.length} زبون</span></div>
+    <div class="section-heading"><h3>زبائن عليهم ديون متراكمة (شهرين فأكثر)</h3><span style="display:flex;gap:8px;align-items:center"><span class="count-badge">${d.debtorsList.length} زبون</span>${d.debtorsList.length?`<button class="btn secondary small" onclick="goRemindDebtors()">💬 التذكير من صفحة الدفعات ←</button>`:""}</span></div>
     ${d.debtorsList.length===0 ? `<div class="empty">لا توجد ديون متراكمة</div>` : `
-    <table><thead><tr><th>الاسم</th><th>حساب المايكروتك</th><th>الهاتف</th><th>الباقة</th><th>المتراكم</th><th>المتابعة</th><th></th></tr></thead>
+    <table><thead><tr><th>الاسم</th><th>حساب المايكروتك</th><th>الهاتف</th><th>الباقة</th><th>المتراكم</th><th>المتابعة</th></tr></thead>
     <tbody>${d.debtorsList.map(c=>`
       <tr><td>${c.name}</td><td>${c.mikrotik||"—"}</td><td>${c.phone}</td>
       <td>${c.speed} ميغا <span class="pill warn">${c.unpaidCount} شهر</span></td>
       <td>${fmtMoney(c.debtAmount)}</td>
-      <td class="follow-cell" data-follow="${c.id}" style="font-size:11.5px;line-height:1.7">${followUpHtml(c)}</td>
-      <td class="action-cell"><button class="btn small" onclick='sendReminder(${JSON.stringify(c.id)})'>تذكير واتساب</button><button class="btn secondary small" onclick='openPromiseModal(${JSON.stringify(c.id)})'>وعد</button></td></tr>
+      <td class="follow-cell" data-follow="${c.id}" style="font-size:11.5px;line-height:1.7">${followUpHtml(c)}</td></tr>
     `).join("")}</tbody></table>`}
   </div>
   `;
@@ -1268,11 +1379,34 @@ function followUpHtmlRaw(c){
   return parts.join("<br/>");
 }
 function followUpHtml(c){ return followUpHtmlRaw(c) || '<span style="color:var(--muted)">—</span>'; }
+function followUpMini(c){
+  const parts = [];
+  if(c.lastReminderAt){
+    const n = daysSince(c.lastReminderAt);
+    if(n !== null) parts.push(`💬 ${n<=0 ? "اليوم" : n===1 ? "أمس" : "قبل "+n+" يوم"}`);
+  }
+  if(c.promiseDate){
+    const expired = c.promiseDate < todayDateStr();
+    parts.push(`<span style="color:${expired?"var(--danger)":"var(--accent)"}">🤝 ${escAttr(c.promiseDate.slice(5).replace("-","/"))}${expired?" انقضى":""}</span>`);
+  }
+  return parts.join(" · ");
+}
+function gridRowActs(c, debt){
+  if(!(debt > 0)) return "";
+  const hasPhone = !!String(c.phone||"").replace(/\D/g,"");
+  return `<div class="row-acts no-print">
+      <button class="wa ${hasPhone?'':'off'}" title="${hasPhone?'تذكير واتساب':'لا يوجد رقم هاتف'}" onclick='event.stopPropagation(); sendReminder(${JSON.stringify(c.id)})'>💬 تذكير</button>
+      <button title="وعد بالدفع" onclick='event.stopPropagation(); openPromiseModal(${JSON.stringify(c.id)})'>🤝 وعد</button>
+    </div>
+    <div class="follow-mini" data-follow-mini="${c.id}">${followUpMini(c)}</div>`;
+}
 function refreshFollowCells(id){
   if(!document.querySelectorAll) return;
   const c = state.customers.find(x=>x.id===id);
   if(!c) return;
   document.querySelectorAll(`[data-follow="${id}"]`).forEach(el=>{ el.innerHTML = followUpHtml(c); });
+  document.querySelectorAll(`[data-follow-mini="${id}"]`).forEach(el=>{ el.innerHTML = followUpMini(c); });
+  if(state.view==="dashboard" && state.dashPick===id){ const card = document.getElementById("dash-card"); if(card) card.innerHTML = dashCardHtml(); }
 }
 function patchCustomerLocal(id, patch){
   const idx = state.customers.findIndex(x=>x.id===id);
@@ -1280,8 +1414,11 @@ function patchCustomerLocal(id, patch){
 }
 
 function sendReminder(id){
-  const c = customerStatsList().find(x=>x.id===id);
-  if(!c) return;
+  const base = state.customers.find(x=>x.id===id);
+  if(!base) return;
+  const c = statsFor(base);
+  if(!String(c.phone||"").replace(/\D/g,"")){ alert(`لا يوجد رقم هاتف لـ ${c.name}.\nأضف رقمه من صفحة الزبائن ثم أعد المحاولة.`); return; }
+  if(c.unpaidCount===0){ alert(`${c.name} لا يوجد عليه أي دين.`); return; }
   window.open(waLink(c.phone, buildReminderMessage(c, c.unpaidMonths, c.debtAmount)), "_blank");
   recordReminder(id);
 }
@@ -1607,7 +1744,7 @@ function renderPayments(){
     <button class="btn secondary" onclick="exportPaymentsPdf()">📄 تصدير PDF</button>
   </div>
   <div class="panel">
-    <div style="color:var(--muted);font-size:12px;margin-bottom:10px">اضغط أي خلية لتسجيل مبلغ، أو "لم يدفع"، أو "غير مشترك" عن ذلك الشهر. الاسم وحساب المايكروتك ثابتان عند التمرير أفقيًا، ورأس الجدول ثابت عند التمرير لأسفل.</div>
+    <div style="color:var(--muted);font-size:12px;margin-bottom:10px">💬 تذكير واتساب و🤝 وعد بالدفع تحت دين كل مشترك. للتذكير السريع: فلتر «عليهم ديون فقط» وترتيب «الأكثر ديناً». اضغط أي خلية لتسجيل مبلغ، أو "لم يدفع"، أو "غير مشترك" عن ذلك الشهر. الاسم وحساب المايكروتك ثابتان عند التمرير أفقيًا، ورأس الجدول ثابت عند التمرير لأسفل.</div>
     <div id="payments-grid-wrap">${renderPaymentsGridOnly()}</div>
   </div>
   `;
@@ -1748,7 +1885,7 @@ function renderPaymentsGridOnly(){
             <div style="color:var(--muted);font-size:11px">${c.mikrotik||"—"}</div>
           </td>
           <td>${c.speed} ميغا</td>
-          <td style="color:${totals.totalDebt>0?'var(--danger)':'var(--muted)'};font-weight:${totals.totalDebt>0?'700':'400'}">${fmtMoney(totals.totalDebt)}</td>
+          <td class="debt-cell"><div style="color:${totals.totalDebt>0?'var(--danger)':'var(--muted)'};font-weight:${totals.totalDebt>0?'700':'400'}">${fmtMoney(totals.totalDebt)}</div>${gridRowActs(c, totals.totalDebt)}</td>
           ${rows.map(r=>`<td id="gridcell-${c.id}-${r.key}" style="cursor:pointer;text-align:center;font-size:12px" onclick='openGridCellModal(${JSON.stringify(c.id)},"${r.key}")'>${gridCellContent(r)}</td>`).join("")}
         </tr>`;
       }).join("")}</tbody>
@@ -1839,6 +1976,7 @@ function applyLocalPaymentUpdate(customerId, month, status, amount, recordedBy, 
   const gridCell = document.getElementById(`gridcell-${customerId}-${month}`);
   if(gridCell && row) gridCell.innerHTML = gridCellContent(row);
 
+  if(state.view === "dashboard") render();
   if(state.statementCustomerId === customerId){
     const wrap = document.getElementById('statement-body-wrap');
     if(wrap) wrap.innerHTML = renderStatementBody(c);
