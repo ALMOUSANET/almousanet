@@ -141,6 +141,7 @@
 <link rel="manifest" href="manifest.json" />
 <meta name="theme-color" content="#10161d" />
 <link rel="icon" href="icon-192.png" />
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 5 L89 27.5 V72.5 L50 95 L11 72.5 V27.5 Z' fill='%231e9e6a' stroke='%231e9e6a' stroke-width='4' stroke-linejoin='round'/%3E%3Cg fill='none' stroke='white' stroke-width='8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M50 46 L34 82 M50 46 L66 82 M39 70 H61'/%3E%3Cpath d='M36 30 Q24 42 36 54'/%3E%3Cpath d='M64 30 Q76 42 64 54'/%3E%3C/g%3E%3Ccircle cx='50' cy='44' r='6.5' fill='white'/%3E%3C/svg%3E" />
 <link rel="apple-touch-icon" href="icon-192.png" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -223,6 +224,25 @@ tr:last-child td { border-bottom:none; }
 .btn.secondary { background:var(--panel-2); color:var(--text); border:1px solid var(--border); }
 .btn.danger { background:var(--danger-dim); color:var(--danger); }
 .btn.small { padding:5px 11px; font-size:12.5px; }
+/* tactile: buttons sit slightly raised and press down when tapped */
+.btn { box-shadow:0 2px 0 rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.18); transition:transform .08s ease, box-shadow .08s ease, filter .15s ease; -webkit-tap-highlight-color:transparent; }
+.btn:hover { filter:brightness(1.05); }
+.btn:active { transform:translateY(2px); box-shadow:0 0 0 rgba(0,0,0,.28), inset 0 1px 2px rgba(0,0,0,.18); }
+.btn:disabled { opacity:.5; cursor:not-allowed; transform:none; }
+/* hold to confirm */
+.hold-btn { position:relative; overflow:hidden; touch-action:none; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
+.hold-btn .hold-fill { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:var(--danger); color:#fff; padding:inherit;
+  clip-path:inset(0 0 0 100%); transition:clip-path .18s cubic-bezier(.23,1,.32,1); pointer-events:none; }
+.hold-btn.hold-ok .hold-fill { background:#14805a; }
+.hold-btn.holding .hold-fill { clip-path:inset(0 0 0 0); transition:clip-path 1.2s linear; }
+.hold-btn.held .hold-fill { clip-path:inset(0 0 0 0); transition:none; }
+/* logo loader */
+.logo-loader { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; padding:40px 0; color:var(--muted); font-size:13px; }
+.logo-loader .ll-still { display:none; }
+.logo-loader .ll-seg { animation:ll-loop 1.4s linear infinite; }
+@keyframes ll-loop { to { stroke-dashoffset:-1; } }
+@media (prefers-reduced-motion: reduce){ .logo-loader .ll-trace{ display:none; } .logo-loader .ll-still{ display:block; } .btn, .hold-btn .hold-fill{ transition:none; } }
+.brand { display:flex; align-items:center; gap:8px; }
 input, select { background:var(--panel-2); border:1px solid var(--border); color:var(--text); padding:8px 10px; border-radius:7px; font-size:13.5px; font-family:inherit; }
 .form-row { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px; align-items:flex-end; }
 .form-row label { font-size:12.5px; color:var(--muted); display:block; margin-bottom:4px; }
@@ -315,10 +335,97 @@ input, select { background:var(--panel-2); border:1px solid var(--border); color
 </style>
 </head>
 <body>
-<div id="root"></div>
+<div id="root"><div style="min-height:100vh;display:flex;align-items:center;justify-content:center"><svg viewBox="0 0 100 100" width="80" height="80" role="status" aria-label="جارِ التحميل"><style>@keyframes ll0{to{stroke-dashoffset:-1}}</style><path d="M50 5 L89 27.5 V72.5 L50 95 L11 72.5 V27.5 Z" fill="none" stroke="#38c98f" stroke-opacity=".18" stroke-width="3" stroke-linejoin="round"/><path d="M50 5 L89 27.5 V72.5 L50 95 L11 72.5 V27.5 Z" fill="none" stroke="#38c98f" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" pathLength="1" stroke-dasharray="0.16 0.84" style="animation:ll0 1.4s linear infinite"/></svg></div></div>
 
 <script>
 // ======================= CONFIG =======================
+// ======================= LOGO (برج إرسال) + LOADER =======================
+const LOGO_VIEW = "0 0 100 100";
+const LOGO_HEX = "M50 5 L89 27.5 V72.5 L50 95 L11 72.5 V27.5 Z";
+// full: two waves each side — login, loader, receipt
+const LOGO_GLYPH_FULL = `<path d="M50 44 L38 80 M50 44 L62 80 M42 68 H58"/><path d="M38 34 Q30 42 38 50"/><path d="M62 34 Q70 42 62 50"/><path d="M30 26 Q16 42 30 58"/><path d="M70 26 Q84 42 70 58"/>`;
+// simple: wider tower, one wave each side — header and phone icon
+const LOGO_GLYPH_SIMPLE = `<path d="M50 46 L34 82 M50 46 L66 82 M39 70 H61"/><path d="M36 30 Q24 42 36 54"/><path d="M64 30 Q76 42 64 54"/>`;
+function logoSvg(size, variant, color, glyphColor){
+  const c = color || "var(--accent)", g = glyphColor || "#fff";
+  const full = variant !== "simple";
+  return `<svg viewBox="${LOGO_VIEW}" width="${size}" height="${size}" aria-hidden="true" style="flex-shrink:0;display:block">
+    <path d="${LOGO_HEX}" fill="${c}" stroke="${c}" stroke-width="4" stroke-linejoin="round"/>
+    <g fill="none" stroke="${g}" stroke-width="${full?6:8}" stroke-linecap="round" stroke-linejoin="round">${full?LOGO_GLYPH_FULL:LOGO_GLYPH_SIMPLE}</g>
+    <circle cx="50" cy="${full?42:44}" r="${full?5:6.5}" fill="${g}"/></svg>`;
+}
+// while loading: a short segment travels around the hexagon (reduced motion: the still logo)
+function logoLoaderHtml(label, size){
+  size = size || 72;
+  return `<div class="logo-loader" role="status" aria-label="${escAttr(label||"جارِ التحميل")}">
+    <svg viewBox="${LOGO_VIEW}" width="${size}" height="${size}" class="ll-trace">
+      <path d="${LOGO_HEX}" fill="none" stroke="var(--accent)" stroke-opacity=".18" stroke-width="3" stroke-linejoin="round"/>
+      <path d="${LOGO_HEX}" fill="none" stroke="var(--accent)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" pathLength="1" stroke-dasharray="0.16 0.84" class="ll-seg"/>
+    </svg>
+    <div class="ll-still">${logoSvg(size, "full")}</div>
+    <div class="ll-label">${escAttr(label||"جارِ التحميل...")}</div>
+  </div>`;
+}
+
+// ======================= HOLD TO CONFIRM (اضغط مطوّلًا) =======================
+// For actions that cannot be undone. A short tap only shows a hint; holding ~1.2 s confirms.
+const HOLD_MS = 1200;
+function holdBtn(label, fn, args, opts){
+  opts = opts || {};
+  const cls = opts.kind==="ok" ? "btn hold-btn hold-ok" : "btn danger hold-btn";
+  return `<button type="button" class="${cls}${opts.small?' small':''}" data-fn="${fn}" data-args='${escAttr(JSON.stringify(args||[]))}'
+      onpointerdown="holdStart(this,event)" onpointerup="holdEnd(this)" onpointerleave="holdEnd(this)" onpointercancel="holdEnd(this)"
+      onkeydown="if((event.key==='Enter'||event.key===' ')&&!event.repeat){event.preventDefault();holdStart(this,event)}"
+      onkeyup="if(event.key==='Enter'||event.key===' '){event.preventDefault();holdEnd(this)}"
+      oncontextmenu="return false" title="اضغط مطوّلًا للتأكيد">
+    <span class="hold-label">${label}</span><span class="hold-fill" aria-hidden="true">${label}</span></button>`;
+}
+function holdStart(btn, ev){
+  if(btn.dataset.holding==="1" || btn.dataset.done==="1") return;
+  if(ev && ev.pointerType && ev.button!==undefined && ev.button!==0) return;
+  btn.dataset.holding = "1";
+  btn.dataset.t0 = String(Date.now());
+  btn.classList.add("holding");
+  btn._holdTimer = setTimeout(()=>{
+    btn.dataset.holding = "0"; btn.dataset.done = "1";
+    btn.classList.remove("holding"); btn.classList.add("held");
+    let args = [];
+    try{ args = JSON.parse(btn.dataset.args||"[]"); }catch(e){}
+    const f = window[btn.dataset.fn];
+    if(typeof f === "function") f(...args, true);
+    setTimeout(()=>{ btn.dataset.done = "0"; btn.classList.remove("held"); }, 1500);
+  }, HOLD_MS);
+}
+function holdEnd(btn){
+  if(btn.dataset.holding!=="1") return;
+  clearTimeout(btn._holdTimer);
+  btn.dataset.holding = "0";
+  btn.classList.remove("holding");
+  if(Date.now() - Number(btn.dataset.t0||0) < 450) showToast("اضغط مطوّلًا على الزر ⏳ للتأكيد", 1800);
+}
+
+// ======================= VERSION =======================
+// Raise this number together with SERVER_VERSION in Code.gs on every update.
+const APP_VERSION = "1.3";
+const APP_VERSION_DATE = "2026-10-14";
+// the lowest Code.gs version this page works with (raise it only when the page needs something new from the server)
+const MIN_SERVER_VERSION = "1.1";
+const CHANGELOG = [
+  { v:"1.3", date:"2026-10-14", notes:"شعار الشبكة (برج إرسال) في الرأس وشاشة الدخول والإيصال وأيقونة الجوال، ومؤشر تحميل بالشعار. الحذف النهائي (زبون، حركة صندوق، مستخدم، تغيير مرفوض) وزر «دفع كل المتأخر» صارت بالضغط المطوّل بدل نافذة التأكيد. أزرار ملموسة تنخفض عند الضغط. (الصفحة والأيقونتان فقط، Code.gs لم يتغير)" },
+  { v:"1.2", date:"2026-10-14", notes:"إيصال دفع صورة للزبون على واتساب: يظهر بعد تسجيل أي دفعة أو دفع كل المتأخر، وبزر 🧾 في كشف الحساب. فيه رقم الإيصال والأشهر والمبلغ ومن استلم والدين المتبقي. (الصفحة فقط، Code.gs لم يتغير)" },
+  { v:"1.1", date:"2026-10-14", notes:"أول إصدار مرقّم. يشمل: الجرد الشهري للصندوقين مع كسر الصندوق وكسر التحصيل، قواعد الدولار (تسليم محمد بالدولار يُطرح من ليراته بسعره، وفواتير الدولار تُطرح من الدولار)، تصدير الدفعات PDF، تذكير واتساب في صفحة الدفعات، البحث في الرئيسية، دعم السنوات، كلمات سر بنص عادي." },
+];
+function versionNum(v){ const p = String(v||"0").split(".").map(Number); return (p[0]||0)*1000 + (p[1]||0); }
+function versionBannerHtml(){
+  if(state.serverVersion === undefined) return "";          // no answer from the server yet
+  const sv = state.serverVersion;
+  if(sv === APP_VERSION) return "";
+  if(sv && versionNum(sv) >= versionNum(MIN_SERVER_VERSION) && versionNum(sv) <= versionNum(APP_VERSION)) return "";   // compatible
+  const msg = (!sv || versionNum(sv) < versionNum(MIN_SERVER_VERSION))
+    ? `⚠ الخادم (Code.gs) على الإصدار ${sv||"قديم بلا رقم"} والصفحة تحتاج ${MIN_SERVER_VERSION} على الأقل. حدّث Code.gs في Apps Script ثم New version.`
+    : `⚠ الصفحة على الإصدار ${APP_VERSION} والخادم على ${sv}. ارفع index.html الأحدث على GitHub، ثم أعد تحميل الصفحة.`;
+  return `<div class="offline-banner no-print" style="background:var(--danger-dim);color:var(--danger)">${msg}</div>`;
+}
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwQTglWdL7Zuc9R0Yh-1sbIzQBctT2aA2xhoCchu4630z5Ns2U7iQEbiBmW5sUbV-E_LA/exec";
 window.APPS_SCRIPT_URL_FOR_REPORT = APPS_SCRIPT_URL;
 const ARABIC_MONTHS = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
@@ -635,7 +742,7 @@ function openRejectedModal(){
           <div style="color:var(--danger);font-size:12.5px;margin:4px 0 8px">${escAttr(it.error)}</div>
           <div style="display:flex;gap:6px">
             <button class="btn small" onclick="retryRejected(${i})">إعادة المحاولة</button>
-            <button class="btn danger small" onclick="discardRejected(${i})">حذف</button>
+            ${holdBtn("حذف", "discardRejected", [i], {small:true})}
           </div>
         </div>`).join("")}
       <div class="modal-actions"><button class="btn secondary" onclick="closeRejectedModal()">إغلاق</button></div>
@@ -658,8 +765,8 @@ function retryRejected(i){
   render(); openRejectedModal();
   trySyncOutbox();
 }
-function discardRejected(i){
-  if(!confirm("حذف هذا التغيير نهائيًا؟ لن يُحفظ.")) return;
+function discardRejected(i, confirmed){
+  if(!confirmed && !confirm("حذف هذا التغيير نهائيًا؟ لن يُحفظ.")) return;
   const list = getRejected(); list.splice(i,1); setRejected(list);
   render(); openRejectedModal();
 }
@@ -735,6 +842,7 @@ async function loadAllData(silent, fresh){
   if(!silent){ state.loading = !state.customers.length ? true : false; render(); }
   const res = await api("getAllData", fresh ? { fresh:true } : {});
   if(res.ok){
+    state.serverVersion = res.version || "";
     const newCustomers = sanitizeCustomers(res.customers);
     const newPayments = res.payments || {};
     const prevPayments = Object.keys(state.payments || {}).length;
@@ -880,7 +988,7 @@ function speedBreakdownData(){
 
 // ======================= ACTIONS =======================
 async function doToggleActive(id){ const r=await api("toggleActive",{id}); if(r.ok) await loadAllData(); else alert(r.error); }
-async function doDeleteCustomer(id){ if(!confirm("حذف نهائي — متأكد؟")) return; const r=await api("deleteCustomer",{id}); if(r.ok) await loadAllData(); else alert(r.error); }
+async function doDeleteCustomer(id, confirmed){ if(!confirmed && !confirm("حذف نهائي — متأكد؟")) return; const r=await api("deleteCustomer",{id}); if(r.ok) await loadAllData(); else alert(r.error); }
 async function doSavePricing(pricing){ const r=await api("setPricing",{pricing}); if(r.ok) await loadAllData(); else alert(r.error); }
 
 // ======================= PWA INSTALL PROMPT =======================
@@ -990,8 +1098,10 @@ function renderLogin(){
   return `
   <div class="login-wrap">
     <div class="login-box">
+      <div style="display:flex;justify-content:center;margin-bottom:12px">${logoSvg(76,"full")}</div>
       <h1>شبكة<span style="color:var(--accent)">الموسى</span></h1>
       <p>سجّل الدخول لمتابعة الزبائن والدفعات</p>
+      <div style="font-size:11px;color:var(--muted);margin:-10px 0 14px">الإصدار ${APP_VERSION}</div>
       ${wasReset ? `<div style="background:var(--warn-dim);color:var(--warn);font-size:12.5px;padding:8px 10px;border-radius:7px;margin-bottom:12px">أُعيد ضبط الجلسة تلقائيًا بسبب خلل متكرر. سجّل الدخول من جديد.</div>` : ""}
       ${expired ? `<div style="background:var(--warn-dim);color:var(--warn);font-size:12.5px;padding:8px 10px;border-radius:7px;margin-bottom:12px">انتهت الجلسة أو أُوقف الحساب. سجّل الدخول من جديد.</div>` : ""}
       <div class="err-msg" id="login-error"></div>
@@ -1026,7 +1136,7 @@ function render(){
 
   root.innerHTML = `
     <div class="topbar no-print">
-      <div class="brand">شبكة<span>الموسى</span></div>
+      <div class="brand">${logoSvg(28,"simple")}<span style="color:inherit">شبكة</span><span>الموسى</span> <small title="رقم الإصدار: الصفحة · الخادم" style="font-size:11px;color:var(--muted);font-weight:400;margin-inline-start:6px">v${APP_VERSION}${state.serverVersion && state.serverVersion!==APP_VERSION ? ` · خادم v${state.serverVersion}` : ""}</small></div>
       <div class="topbar-right">
         <span class="sidebar-user-info">${state.user.name} — ${state.user.role==='admin'?'مدير':'محاسب'}</span>
         <button class="theme-toggle-btn" onclick="toggleTheme()">${isLight? '🌙 الوضع الليلي' : '☀️ الوضع النهاري'}</button>
@@ -1034,6 +1144,7 @@ function render(){
         <button class="nav-btn" onclick="logout()">تسجيل خروج</button>
       </div>
     </div>
+    ${versionBannerHtml()}
     ${staleBannerHtml()}
     ${outboxBannerHtml()}
     <div class="body-row">
@@ -1042,7 +1153,7 @@ function render(){
       </div>
       <div class="main">
         ${state.error ? `<div class="save-warn">${state.error}</div>` : ""}
-        ${state.loading ? `<div class="empty">جارِ التحميل...</div>` : renderView()}
+        ${state.loading ? logoLoaderHtml("جارِ تحميل البيانات...") : renderView()}
       </div>
     </div>
   `;
@@ -1112,7 +1223,7 @@ function renderActivityLog(){
     <button class="btn secondary small" onclick="activityLogFetched=false; loadActivityLog()">تحديث</button>
   </div>
   <div class="panel">
-    ${state.activityLogLoading ? `<div class="empty">جارِ التحميل...</div>` :
+    ${state.activityLogLoading ? logoLoaderHtml("جارِ التحميل...", 52) :
       state.activityLog.length===0 ? `<div class="empty">لا يوجد نشاط مسجل بعد</div>` : `
     <table><thead><tr><th>الوقت</th><th>المستخدم</th><th>الإجراء</th><th>التفاصيل</th></tr></thead>
     <tbody>${state.activityLog.map(l=>`<tr><td>${formatLogTime(l.timestamp)}</td><td>${l.user||"—"}</td><td>${l.action||"—"}</td><td>${l.details||"—"}</td></tr>`).join("")}</tbody></table>`}
@@ -1159,8 +1270,8 @@ async function backupNowClick(){
   const r = await api("backupNow", {});
   if(r.ok){ showToast("تم: " + r.name); await loadUsers(); } else { hideToast(); alert(r.error || "تعذر إنشاء النسخة"); }
 }
-async function deleteUserRow(id){
-  if(!confirm("حذف هذا المستخدم نهائيًا؟")) return;
+async function deleteUserRow(id, confirmed){
+  if(!confirmed && !confirm("حذف هذا المستخدم نهائيًا؟")) return;
   const r = await api("deleteUser", {id});
   if(r.ok) await loadUsers(); else alert(r.error);
 }
@@ -1188,13 +1299,18 @@ function renderUsers(){
     <button class="btn secondary" onclick="backupNowClick()">نسخ احتياطي الآن</button>
   </div>
   <div class="panel">
+    <h3>الإصدار</h3>
+    <div style="font-size:13px;margin-bottom:8px">الصفحة: <b>v${APP_VERSION}</b> · الخادم: <b>${state.serverVersion ? "v"+escAttr(state.serverVersion) : (state.serverVersion==="" ? "قديم بلا رقم" : "—")}</b>${state.serverVersion!==undefined && !versionBannerHtml() ? ' <span class="pill ok">متوافقان ✓</span>' : (state.serverVersion!==undefined ? ' <span class="pill late">غير متوافقين</span>' : "")}</div>
+    ${CHANGELOG.map(c=>`<div style="font-size:12.5px;line-height:1.8;border-top:1px solid var(--border);padding-top:6px;margin-top:6px"><b>v${c.v}</b> <span style="color:var(--muted)">— ${c.date}</span><br/>${c.notes}</div>`).join("")}
+  </div>
+  <div class="panel">
     <h3>هيكل الشيت</h3>
     <div style="font-size:13px;color:var(--muted);margin-bottom:8px">يضيف أي عمود أو صفحة ناقصة (Box وRate وReceivedBy وCashCounts وغيرها) ويعبّئ القيم الافتراضية للصفوف القديمة. يضيف فقط، ولا يحذف ولا يغيّر أي قيمة موجودة. يعمل أيضًا تلقائيًا أول دخول بعد كل تحديث.</div>
     <button class="btn secondary" onclick="fixStructureClick()">فحص هيكل الشيت وإصلاحه</button>
   </div>
   <div class="panel">
     <h3>المستخدمون الحاليون</h3>
-    ${state.usersLoading ? `<div class="empty">جارِ التحميل...</div>` :
+    ${state.usersLoading ? logoLoaderHtml("جارِ التحميل...", 52) :
       state.usersList.length===0 ? `<div class="empty">لا يوجد مستخدمون</div>` : `
     <table><thead><tr><th>الاسم</th><th>اسم المستخدم</th><th>الصلاحية</th><th>الهاتف</th><th>الحالة</th><th></th></tr></thead>
     <tbody>${state.usersList.map(u=>{
@@ -1205,7 +1321,7 @@ function renderUsers(){
       <td class="action-cell">
         <button class="btn secondary small" onclick='toggleUserRow(${JSON.stringify(u.id)})'>${isActive?"تعطيل":"تفعيل"}</button>
         <button class="btn secondary small" onclick='resetUserPassword(${JSON.stringify(u.id)})'>كلمة سر جديدة</button>
-        <button class="btn danger small" onclick='deleteUserRow(${JSON.stringify(u.id)})'>حذف نهائي</button>
+        ${holdBtn("حذف نهائي", "deleteUserRow", [u.id], {small:true})}
       </td>
     </tr>`;
     }).join("")}</tbody></table>`}
@@ -1628,7 +1744,7 @@ function renderCustomersTableOnly(){
         <td class="action-cell">
           <button class="btn secondary small" onclick='openCustomerEditModal(${JSON.stringify(c.id)})'>تعديل</button>
           <button class="btn secondary small" onclick='doToggleActive(${JSON.stringify(c.id)})'>${isActive?"تعطيل":"تفعيل"}</button>
-          ${state.user.role==="admin"?`<button class="btn danger small" onclick='doDeleteCustomer(${JSON.stringify(c.id)})'>حذف نهائي</button>`:""}
+          ${state.user.role==="admin"?holdBtn("حذف نهائي", "doDeleteCustomer", [c.id], {small:true}):""}
         </td>
       </tr>`;
     }).join("")}</tbody></table>`}
@@ -2029,9 +2145,186 @@ async function saveGridCell(customerId, month){
     return;
   }
 
-  if(status==='paid' && confirm("تم تسجيل الدفعة. هل تريد إرسال تأكيد عبر واتساب؟")){
-    window.open(waLink(c.phone, buildConfirmMessage(c, monthLabelOf(month), amount)), "_blank");
+  if(status==='paid') openReceiptModal(customerId, [{ month, amount }], receivedBy, state.user.name);
+}
+
+// ======================= PAYMENT RECEIPT (إيصال دفع — image for WhatsApp) =======================
+let receiptCurrent = null;   // { blob, file, data }
+function receiptNumber(d){
+  const p = n => String(n).padStart(2,"0");
+  return `R-${String(d.getFullYear()).slice(2)}${p(d.getMonth()+1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
+}
+function buildReceiptData(customerId, items, receivedBy, recordedBy, when){
+  const base = state.customers.find(c=>c.id===customerId);
+  if(!base) return null;
+  const st = statsFor(base);
+  const d = when ? new Date(when) : new Date();
+  const p = n => String(n).padStart(2,"0");
+  return {
+    no: receiptNumber(d),
+    date: `${p(d.getDate())}/${p(d.getMonth()+1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`,
+    customer: { name:base.name, mikrotik:base.mikrotik||"—", speed:base.speed, phone:base.phone||"" },
+    items: items.map(x=>({ label: monthLabelOf(x.month), amount: Number(x.amount)||0 })),
+    total: items.reduce((s,x)=>s+(Number(x.amount)||0),0),
+    receivedBy: receivedBy==='firas' ? "فراس (تحويل مباشر)" : "محمد (المحاسب)",
+    recordedBy: recordedBy || (state.user && state.user.name) || "",
+    remaining: st.debtAmount,
+    remainingMonths: st.unpaidMonths.map(r=>r.label),
+  };
+}
+// draws the receipt on a canvas (no external library, Arabic shaped by the browser)
+function drawReceipt(data){
+  const W = 600, pad = 34, S = 2;
+  const font = (w, px) => `${w} ${px}px Tahoma, "Segoe UI", Arial, sans-serif`;
+  const rows = [];
+  const add = (type, a, b, opt) => rows.push({ type, a, b, opt:opt||{} });
+  add("title", "شبكة الموسى للإنترنت");
+  add("sub", "إيصال دفع");
+  add("kv", "رقم الإيصال", data.no);
+  add("kv", "التاريخ", data.date);
+  add("rule");
+  add("kv", "الزبون", data.customer.name, { bold:true });
+  add("kv", "حساب المايكروتك", data.customer.mikrotik);
+  add("kv", "الباقة", `${data.customer.speed} ميغا`);
+  add("rule");
+  add("head", "الشهر", "المبلغ");
+  data.items.forEach(it => add("kv", it.label, fmtMoney(it.amount)));
+  add("rule");
+  add("total", "المجموع المدفوع", fmtMoney(data.total));
+  add("kv", "استلمها", data.receivedBy);
+  add("rule");
+  if(data.remaining > 0){
+    add("kv", "المتبقي عليك", fmtMoney(data.remaining), { color:"#b3261e", bold:true });
+    add("small", "الأشهر: " + data.remainingMonths.join("، "));
+  } else {
+    add("ok", "لا يوجد عليك أي دين ✓");
   }
+  add("rule");
+  add("thanks", "شكرًا لكم — شبكة الموسى للإنترنت");
+  const H_OF = { title:46, sub:34, kv:36, rule:22, head:34, total:44, small:0, ok:40, thanks:40 };
+  // measure wrapped small text
+  const mc = document.createElement("canvas").getContext("2d");
+  mc.font = font(400, 15);
+  const wrap = (txt) => { const words = String(txt).split(" "); const lines = []; let cur = ""; words.forEach(w => { const t = cur ? cur+" "+w : w; if(mc.measureText(t).width > W-2*pad && cur){ lines.push(cur); cur = w; } else cur = t; }); if(cur) lines.push(cur); return lines; };
+  rows.forEach(r => { if(r.type==="small"){ r.lines = wrap(r.a); r.h = r.lines.length*24 + 6; } else r.h = H_OF[r.type]; });
+  const teeth = 14, top = 70, bottomGap = 22;
+  const paperH = top + rows.reduce((s,r)=>s+r.h,0) + 26;
+  const H = paperH + teeth + bottomGap;
+  const cv = document.createElement("canvas");
+  cv.width = (W+40)*S; cv.height = (H+20)*S;
+  const ctx = cv.getContext("2d");
+  ctx.scale(S,S);
+  ctx.fillStyle = "#e7ebee"; ctx.fillRect(0,0,W+40,H+20);
+  ctx.translate(20, 14);
+  // paper with a saw-tooth bottom edge
+  ctx.save();
+  ctx.shadowColor = "rgba(0,0,0,.18)"; ctx.shadowBlur = 14; ctx.shadowOffsetY = 4;
+  ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(W,0); ctx.lineTo(W,paperH);
+  const n = 30;
+  for(let i=1;i<=n*2;i++){ const x = W - i*W/(n*2); ctx.lineTo(x, i%2 ? paperH+teeth : paperH); }
+  ctx.closePath(); ctx.fillStyle = "#ffffff"; ctx.fill();
+  ctx.restore();
+  ctx.fillStyle = "#1e9e6a"; ctx.fillRect(0,0,W,6);
+  try{   // small logo above the network name
+    ctx.save(); ctx.translate(W/2-24, 14); ctx.scale(0.48, 0.48);
+    const hex = new Path2D(LOGO_HEX);
+    ctx.fillStyle = "#1e9e6a"; ctx.strokeStyle = "#1e9e6a"; ctx.lineWidth = 4; ctx.lineJoin = "round"; ctx.fill(hex); ctx.stroke(hex);
+    ctx.strokeStyle = "#fff"; ctx.lineWidth = 6; ctx.lineCap = "round";
+    ["M50 44 L38 80 M50 44 L62 80 M42 68 H58","M38 34 Q30 42 38 50","M62 34 Q70 42 62 50","M30 26 Q16 42 30 58","M70 26 Q84 42 70 58"].forEach(d=>ctx.stroke(new Path2D(d)));
+    ctx.beginPath(); ctx.arc(50,42,5,0,Math.PI*2); ctx.fillStyle = "#fff"; ctx.fill();
+    ctx.restore();
+  }catch(e){}
+  ctx.direction = "rtl";
+  let y = top;
+  const R = W - pad, L = pad;
+  rows.forEach(r=>{
+    const mid = y + r.h/2 + 6;
+    ctx.fillStyle = "#1b1f23"; ctx.textAlign = "right";
+    if(r.type==="title"){ ctx.font = font(700, 26); ctx.textAlign = "center"; ctx.fillText(r.a, W/2, mid); }
+    else if(r.type==="sub"){ ctx.font = font(400, 17); ctx.fillStyle = "#5c6670"; ctx.textAlign = "center"; ctx.fillText(r.a, W/2, mid-4); }
+    else if(r.type==="rule"){ ctx.strokeStyle = "#c5ccd3"; ctx.setLineDash([6,5]); ctx.beginPath(); ctx.moveTo(L, y+r.h/2); ctx.lineTo(R, y+r.h/2); ctx.stroke(); ctx.setLineDash([]); }
+    else if(r.type==="head"){ ctx.font = font(700, 15); ctx.fillStyle = "#5c6670"; ctx.fillText(r.a, R, mid); ctx.textAlign = "left"; ctx.fillText(r.b, L, mid); }
+    else if(r.type==="kv"){ ctx.font = font(400, 17); ctx.fillStyle = "#5c6670"; ctx.fillText(r.a, R, mid); ctx.textAlign = "left"; ctx.font = font(r.opt.bold?700:400, 18); ctx.fillStyle = r.opt.color || "#1b1f23";
+      ctx.direction = /[\u0600-\u06FF]/.test(String(r.b)) ? "rtl" : "ltr";   // dates / numbers keep their order
+      ctx.fillText(r.b, L, mid); ctx.direction = "rtl"; }
+    else if(r.type==="total"){ ctx.font = font(700, 20); ctx.fillText(r.a, R, mid); ctx.textAlign = "left"; ctx.fillStyle = "#1e9e6a"; ctx.font = font(700, 24); ctx.fillText(r.b, L, mid); }
+    else if(r.type==="small"){ ctx.font = font(400, 15); ctx.fillStyle = "#b3261e"; r.lines.forEach((ln,i)=>ctx.fillText(ln, R, y + 20 + i*24)); }
+    else if(r.type==="ok"){ ctx.font = font(700, 19); ctx.fillStyle = "#1e9e6a"; ctx.textAlign = "center"; ctx.fillText(r.a, W/2, mid); }
+    else if(r.type==="thanks"){ ctx.font = font(400, 15); ctx.fillStyle = "#5c6670"; ctx.textAlign = "center"; ctx.fillText(r.a, W/2, mid); }
+    y += r.h;
+  });
+  return cv;
+}
+function receiptText(data){
+  return `إيصال دفع — شبكة الموسى للإنترنت\nرقم ${data.no} · ${data.date}\n${data.customer.name} (${data.customer.mikrotik})\n` +
+    data.items.map(i=>`${i.label}: ${fmtMoney(i.amount)}`).join("\n") +
+    `\nالمجموع: ${fmtMoney(data.total)}\n` + (data.remaining>0 ? `المتبقي: ${fmtMoney(data.remaining)}` : `لا يوجد عليكم دين ✓`);
+}
+function openReceiptModal(customerId, items, receivedBy, recordedBy, when){
+  const data = buildReceiptData(customerId, items, receivedBy, recordedBy, when);
+  if(!data || !items.length) return;
+  closeReceiptModal();
+  let cv;
+  try{ cv = drawReceipt(data); }
+  catch(e){   // a browser that cannot draw images: fall back to the text confirmation
+    if(String(data.customer.phone).replace(/\D/g,"") && confirm("تم تسجيل الدفعة. هل تريد إرسال تأكيد عبر واتساب؟")) window.open(waLink(data.customer.phone, receiptText(data)), "_blank");
+    return;
+  }
+  const url = cv.toDataURL("image/png");
+  receiptCurrent = { data, blob:null, file:null };
+  cv.toBlob(b=>{ if(!b || !receiptCurrent) return; receiptCurrent.blob = b; try{ receiptCurrent.file = new File([b], `إيصال-${data.no}.png`, { type:"image/png" }); }catch(e){} }, "image/png");
+  const hasPhone = !!String(data.customer.phone).replace(/\D/g,"");
+  const canShareFiles = !!(navigator.canShare && typeof File !== "undefined");
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.id = "receipt-overlay";
+  overlay.innerHTML = `
+    <div class="modal-box stack-form" style="max-width:420px;max-height:92vh;overflow-y:auto">
+      <h3>🧾 إيصال ${escAttr(data.customer.name)}</h3>
+      <img src="${url}" alt="إيصال" style="width:100%;border-radius:8px;display:block;margin-bottom:10px" />
+      <div class="modal-actions" style="flex-direction:column;align-items:stretch">
+        ${canShareFiles ? `<button class="btn" onclick="shareReceipt()">📤 إرسال الصورة على واتساب</button>` : ""}
+        ${hasPhone ? `<button class="btn ${canShareFiles?'secondary':''}" onclick="copyReceiptAndOpenChat()">📋 نسخ الصورة وفتح محادثة الزبون</button>` : ""}
+        <button class="btn secondary" onclick="downloadReceipt()">⬇ حفظ الصورة</button>
+        ${hasPhone ? `<button class="btn secondary" onclick="sendReceiptText()">💬 إرسال كرسالة نصية بدل الصورة</button>` : ""}
+        <button class="btn secondary" onclick="closeReceiptModal()">إغلاق</button>
+      </div>
+      <div style="color:var(--muted);font-size:11.5px;margin-top:8px;line-height:1.7">على الجوال: «إرسال الصورة» يفتح قائمة المشاركة، فاختر واتساب ثم الزبون.${hasPhone?" على الكمبيوتر: «نسخ الصورة وفتح المحادثة» ثم الصق الصورة (Ctrl+V) في المحادثة.":" لا يوجد رقم هاتف لهذا الزبون."}</div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+function closeReceiptModal(){ const el = document.getElementById("receipt-overlay"); if(el) el.remove(); receiptCurrent = null; }
+async function shareReceipt(){
+  const r = receiptCurrent;
+  if(!r || !r.file){ alert("الصورة لم تجهز بعد، أعد المحاولة بعد لحظة."); return; }
+  if(!(navigator.canShare && navigator.canShare({ files:[r.file] }))){ downloadReceipt(); alert("هذا المتصفح لا يدعم مشاركة الصور مباشرة. حُفظت الصورة، أرسلها من واتساب."); return; }
+  try{ await navigator.share({ files:[r.file], text:`إيصال دفع — ${r.data.customer.name}` }); }
+  catch(e){ if(e && e.name!=="AbortError") alert("تعذرت المشاركة: " + (e.message||e)); }
+}
+async function copyReceiptAndOpenChat(){
+  const r = receiptCurrent;
+  if(!r) return;
+  let copied = false;
+  try{ if(r.blob && navigator.clipboard && window.ClipboardItem){ await navigator.clipboard.write([new ClipboardItem({ "image/png": r.blob })]); copied = true; } }catch(e){}
+  window.open(waLink(r.data.customer.phone, copied ? "" : receiptText(r.data)), "_blank");
+  showToast(copied ? "نُسخت الصورة — الصقها في المحادثة (Ctrl+V)" : "تعذر نسخ الصورة؛ فتحت المحادثة برسالة نصية", 5000);
+}
+function downloadReceipt(){
+  const r = receiptCurrent;
+  if(!r || !r.blob) return;
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(r.blob); a.download = `إيصال-${r.data.no}.png`;
+  document.body.appendChild(a); a.click(); a.remove();
+}
+function sendReceiptText(){
+  const r = receiptCurrent;
+  if(!r) return;
+  window.open(waLink(r.data.customer.phone, receiptText(r.data)), "_blank");
+}
+function receiptForRow(customerId, month){
+  const rec = state.payments[`${customerId}:${month}`];
+  if(!rec || rec.status!=='paid') return;
+  openReceiptModal(customerId, [{ month, amount:rec.amount }], rec.receivedBy, rec.recordedBy, rec.date || undefined);
 }
 
 // ======================= STATEMENT =======================
@@ -2067,7 +2360,7 @@ function renderStatementBody(customer){
       <td>${statusPill(r.status)}</td>
       <td>${r.status==='paid'?isoToDateStr(r.date):"—"}</td>
       <td>${r.status==='paid'?((r.recordedBy||"—") + (r.receivedBy==='firas' ? ' · تحويل مباشر لفراس' : '')):"—"}</td>
-      <td class="no-print"><button class="btn secondary small" onclick='openGridCellModal(${JSON.stringify(customer.id)},"${r.key}")'>تعديل</button></td></tr>`).join("")}</tbody></table>
+      <td class="no-print action-cell"><button class="btn secondary small" onclick='openGridCellModal(${JSON.stringify(customer.id)},"${r.key}")'>تعديل</button>${r.status==='paid'?`<button class="btn secondary small" title="إيصال" onclick='receiptForRow(${JSON.stringify(customer.id)},"${r.key}")'>🧾</button>`:""}</td></tr>`).join("")}</tbody></table>
     <div class="stat-grid" style="margin-top:16px;margin-bottom:0">
       <div class="stat-card accent"><div class="label">إجمالي المدفوع</div><div class="value">${fmtMoney(totalPaid)}</div></div>
       <div class="stat-card danger"><div class="label">إجمالي المتبقي (كل السنوات)</div><div class="value">${fmtMoney(totalDue)}</div>${otherYearsDue>0?`<div class="sub">منها ${fmtMoney(otherYearsDue)} من سنوات أخرى</div>`:""}</div>
@@ -2115,7 +2408,7 @@ async function payAllOverdueForCustomer(id){
         <select id="pa-receiver"><option value="mohammed">محمد (المحاسب)</option><option value="firas">فراس مباشرة (تحويل)</option></select></div></div>
       <div id="pa-total" style="font-weight:700;margin:8px 0"></div>
       <div class="modal-actions">
-        <button class="btn" onclick='confirmPayAll(${JSON.stringify(customer.id)}, ${JSON.stringify(unpaid.map(r=>r.key))})'>تسجيل الدفع</button>
+        ${holdBtn("⏳ اضغط مطوّلًا لتسجيل الدفع", "confirmPayAll", [customer.id, unpaid.map(r=>r.key)], {kind:"ok"})}
         <button class="btn secondary" onclick="closePayAllModal()">إلغاء</button>
       </div>
     </div>`;
@@ -2132,7 +2425,7 @@ function updatePayAllTotal(n){
   const el = document.getElementById("pa-total");
   if(el) el.textContent = `${count} شهر — الإجمالي ${fmtMoney(total)}`;
 }
-async function confirmPayAll(customerId, keys){
+async function confirmPayAll(customerId, keys, _held){
   const picks = [];
   for(let i=0;i<keys.length;i++){
     const on = document.getElementById("pa-on-"+i), amt = document.getElementById("pa-amt-"+i);
@@ -2145,17 +2438,18 @@ async function confirmPayAll(customerId, keys){
   const receivedBy = document.getElementById("pa-receiver")?.value==='firas' ? 'firas' : 'mohammed';
   closePayAllModal();
   showToast(`جارِ تسجيل ${picks.length} شهر...`, 60000);
-  let saved = 0;
+  let saved = 0; const savedPicks = [];
   for(const p of picks){
     const res = await api("setPaymentStatus", {customerId, month:p.month, status:'paid', amount:p.amount, receivedBy, expectNew:true});
     if(res.alreadyPaid) continue;   // someone recorded this month a moment ago: leave it untouched
-    if(res.networkError){ queueOutbox("setPaymentStatus", {customerId, month:p.month, status:'paid', amount:p.amount, receivedBy, expectNew:true}); applyLocalPaymentUpdate(customerId, p.month, 'paid', p.amount, state.user.name, receivedBy); saved++; continue; }
+    if(res.networkError){ queueOutbox("setPaymentStatus", {customerId, month:p.month, status:'paid', amount:p.amount, receivedBy, expectNew:true}); applyLocalPaymentUpdate(customerId, p.month, 'paid', p.amount, state.user.name, receivedBy); saved++; savedPicks.push(p); continue; }
     if(!res.ok){ hideToast(); alert("تعذر الحفظ: " + (res.error||"")); break; }
-    saved++;
+    saved++; savedPicks.push(p);
   }
   hideToast();
   showToast(`سُجّل ${saved} شهر ✓`);
   await loadAllData();
+  if(savedPicks.length) openReceiptModal(customerId, savedPicks, receivedBy, state.user.name);
 }
 function sendStatementWA(){
   const customer = state.customers.find(c=>c.id===state.statementCustomerId);
@@ -2538,7 +2832,7 @@ function renderExpenseTable(list, month){
   return `
   <div class="panel">
     <h3>حركات ${monthLabelOf(month)} (${list.length})</h3>
-    ${state.expensesLoading?`<div class="empty">جارِ التحميل...</div>`:
+    ${state.expensesLoading?logoLoaderHtml("جارِ التحميل...", 52):
       list.length===0?`<div class="empty">لا توجد حركات بهذا الشهر</div>`:`
     <table><thead><tr><th>التاريخ</th><th>النوع</th><th>الفئة</th><th>الصندوق</th><th>المبلغ</th><th>ملاحظات</th><th></th></tr></thead>
     <tbody>${list.map(e=>{
@@ -2552,7 +2846,7 @@ function renderExpenseTable(list, month){
       <td style="color:var(--muted);font-size:12px">${e.notes||"—"}</td>
       <td class="action-cell">
         ${canEditExpense(e)?`<button class="btn secondary small" onclick='startEditExpense(${JSON.stringify(e.id)})'>تعديل</button>`:""}
-        ${state.user.role==="admin"?`<button class="btn danger small" onclick='deleteExpenseRow(${JSON.stringify(e.id)})'>حذف</button>`:""}
+        ${state.user.role==="admin"?holdBtn("حذف", "deleteExpenseRow", [e.id], {small:true}):""}
       </td>
     </tr>`;}).join("")}</tbody></table>`}
   </div>`;
@@ -2562,7 +2856,7 @@ function renderExpenses(){
   ensureExpenseForm();
   if(!state.expensesLoaded){
     return `<h1 class="page-title">الصندوق المالي</h1>` + (state.expensesLoading
-      ? `<div class="empty">جارِ التحميل...</div>`
+      ? logoLoaderHtml("جارِ تحميل الصندوق...")
       : `<div class="panel"><div class="empty">${escAttr(state.expensesLoadError || "لم تُحمَّل بيانات الصندوق بعد")}</div><div style="text-align:center;margin-top:8px"><button class="btn" onclick="loadExpenses()">إعادة المحاولة</button></div></div>`);
   }
   const pendingFin = state.expensesList.filter(e=>e.pending).length;
@@ -3092,8 +3386,8 @@ function cancelEditExpense(){
   expenseForm = blankExpenseForm(expenseForm.type);
   render();
 }
-async function deleteExpenseRow(id){
-  if(!confirm("حذف هذه الحركة نهائيًا؟")) return;
+async function deleteExpenseRow(id, confirmed){
+  if(!confirmed && !confirm("حذف هذه الحركة نهائيًا؟")) return;
   // a movement still waiting in the queue was never saved: just cancel it
   const cq = cancelQueuedAdd(id);
   if(cq==="busy"){ alert("هذه الحركة قيد الإرسال إلى الخادم الآن. انتظر بضع ثوانٍ حتى تُحفظ ثم احذفها."); return; }
