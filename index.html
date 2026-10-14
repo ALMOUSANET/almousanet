@@ -406,11 +406,12 @@ function holdEnd(btn){
 
 // ======================= VERSION =======================
 // Raise this number together with SERVER_VERSION in Code.gs on every update.
-const APP_VERSION = "1.3";
+const APP_VERSION = "1.4";
 const APP_VERSION_DATE = "2026-10-14";
 // the lowest Code.gs version this page works with (raise it only when the page needs something new from the server)
 const MIN_SERVER_VERSION = "1.1";
 const CHANGELOG = [
+  { v:"1.4", date:"2026-10-14", notes:"زر «🧾 إيصال لعدة أشهر» في كشف الحساب: تختار الأشهر المدفوعة (ما دُفع اليوم محدّد تلقائيًا) فيخرج إيصال واحد بها ومجموعها. (الصفحة فقط)" },
   { v:"1.3", date:"2026-10-14", notes:"شعار الشبكة (برج إرسال) في الرأس وشاشة الدخول والإيصال وأيقونة الجوال، ومؤشر تحميل بالشعار. الحذف النهائي (زبون، حركة صندوق، مستخدم، تغيير مرفوض) وزر «دفع كل المتأخر» صارت بالضغط المطوّل بدل نافذة التأكيد. أزرار ملموسة تنخفض عند الضغط. (الصفحة والأيقونتان فقط، Code.gs لم يتغير)" },
   { v:"1.2", date:"2026-10-14", notes:"إيصال دفع صورة للزبون على واتساب: يظهر بعد تسجيل أي دفعة أو دفع كل المتأخر، وبزر 🧾 في كشف الحساب. فيه رقم الإيصال والأشهر والمبلغ ومن استلم والدين المتبقي. (الصفحة فقط، Code.gs لم يتغير)" },
   { v:"1.1", date:"2026-10-14", notes:"أول إصدار مرقّم. يشمل: الجرد الشهري للصندوقين مع كسر الصندوق وكسر التحصيل، قواعد الدولار (تسليم محمد بالدولار يُطرح من ليراته بسعره، وفواتير الدولار تُطرح من الدولار)، تصدير الدفعات PDF، تذكير واتساب في صفحة الدفعات، البحث في الرئيسية، دعم السنوات، كلمات سر بنص عادي." },
@@ -2166,7 +2167,7 @@ function buildReceiptData(customerId, items, receivedBy, recordedBy, when){
     customer: { name:base.name, mikrotik:base.mikrotik||"—", speed:base.speed, phone:base.phone||"" },
     items: items.map(x=>({ label: monthLabelOf(x.month), amount: Number(x.amount)||0 })),
     total: items.reduce((s,x)=>s+(Number(x.amount)||0),0),
-    receivedBy: receivedBy==='firas' ? "فراس (تحويل مباشر)" : "محمد (المحاسب)",
+    receivedBy: receivedBy==='firas' ? "فراس (تحويل مباشر)" : receivedBy==='mixed' ? "محمد + فراس" : "محمد (المحاسب)",
     recordedBy: recordedBy || (state.user && state.user.name) || "",
     remaining: st.debtAmount,
     remainingMonths: st.unpaidMonths.map(r=>r.label),
@@ -2321,6 +2322,67 @@ function sendReceiptText(){
   if(!r) return;
   window.open(waLink(r.data.customer.phone, receiptText(r.data)), "_blank");
 }
+// ---- one receipt for several paid months (picked by the user; today's payments are pre-selected) ----
+function openMultiReceipt(customerId){
+  const c = state.customers.find(x=>x.id===customerId);
+  if(!c) return;
+  const paid = getStatementRows(c).filter(r=>r.status==='paid').reverse();   // newest month first
+  if(!paid.length){ alert("لا توجد أشهر مدفوعة لهذا الزبون."); return; }
+  const dayOf = r => r.date ? localDateStr(r.date) : "";
+  const today = todayDateStr();
+  let preDay = paid.some(r=>dayOf(r)===today) ? today : (paid.map(dayOf).filter(Boolean).sort().pop() || "");
+  closeMultiReceipt();
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.id = "multireceipt-overlay";
+  overlay.innerHTML = `
+    <div class="modal-box stack-form" style="max-width:460px;max-height:90vh;overflow-y:auto">
+      <h3>🧾 إيصال لعدة أشهر — ${escAttr(c.name)}</h3>
+      <div style="color:var(--muted);font-size:12.5px;margin-bottom:10px">${preDay ? `محدّد تلقائيًا ما دُفع ${preDay===today?"اليوم":"بتاريخ "+preDay}.` : ""} أضف أو أزل ما تريد.</div>
+      ${paid.map((r,i)=>`
+        <label style="display:flex;align-items:center;gap:8px;margin:0 0 6px;cursor:pointer">
+          <input type="checkbox" id="mr-on-${i}" data-month="${r.key}" ${preDay && dayOf(r)===preDay ? "checked" : ""} onchange='updateMultiReceiptTotal(${JSON.stringify(customerId)}, ${paid.length})' style="width:auto" />
+          <span style="flex:1">${r.label}<span style="color:var(--muted);font-size:11.5px"> · ${r.date ? isoToDateStr(r.date) : "بدون تاريخ"}${r.receivedBy==='firas' ? " · فراس" : ""}</span></span>
+          <b>${fmtMoney(r.amount)}</b>
+        </label>`).join("")}
+      <div id="mr-total" style="font-weight:700;margin:10px 0"></div>
+      <div class="modal-actions">
+        <button class="btn" onclick='makeMultiReceipt(${JSON.stringify(customerId)}, ${paid.length})'>إنشاء الإيصال</button>
+        <button class="btn secondary" onclick="closeMultiReceipt()">إلغاء</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  updateMultiReceiptTotal(customerId, paid.length);
+}
+function closeMultiReceipt(){ const el = document.getElementById("multireceipt-overlay"); if(el) el.remove(); }
+function pickedMultiReceipt(customerId, n){
+  const out = [];
+  for(let i=0;i<n;i++){
+    const el = document.getElementById("mr-on-"+i);
+    if(!el || !el.checked) continue;
+    const month = el.dataset ? el.dataset.month : el.getAttribute("data-month");
+    const rec = state.payments[`${customerId}:${month}`];
+    if(rec && rec.status==='paid') out.push({ month, amount:rec.amount, rec });
+  }
+  return out.sort((a,b)=>a.month.localeCompare(b.month));   // oldest month first on the receipt
+}
+function updateMultiReceiptTotal(customerId, n){
+  const el = document.getElementById("mr-total");
+  if(!el) return;
+  const picks = pickedMultiReceipt(customerId, n);
+  const total = picks.reduce((x,p)=>x+(Number(p.amount)||0),0);
+  el.textContent = picks.length ? `${picks.length} ${picks.length===1?"شهر":"أشهر"} — المجموع ${fmtMoney(total)}` : "لم تحدد أي شهر";
+}
+function makeMultiReceipt(customerId, n){
+  const picks = pickedMultiReceipt(customerId, n);
+  if(!picks.length){ alert("حدّد شهرًا واحدًا على الأقل."); return; }
+  const recv = new Set(picks.map(p=>p.rec.receivedBy==='firas' ? 'firas' : 'mohammed'));
+  const receivedBy = recv.size > 1 ? 'mixed' : [...recv][0];
+  const recorders = [...new Set(picks.map(p=>p.rec.recordedBy).filter(Boolean))];
+  const lastDate = picks.map(p=>p.rec.date).filter(Boolean).sort().pop();
+  closeMultiReceipt();
+  openReceiptModal(customerId, picks.map(p=>({ month:p.month, amount:p.amount })), receivedBy, recorders.join("، "), lastDate || undefined);
+}
 function receiptForRow(customerId, month){
   const rec = state.payments[`${customerId}:${month}`];
   if(!rec || rec.status!=='paid') return;
@@ -2347,6 +2409,7 @@ function renderStatementBody(customer){
   <div class="panel no-print" style="display:flex;gap:10px;flex-wrap:wrap">
     <button class="btn" onclick="finishPdfExport(); window.print()">طباعة / حفظ PDF</button>
     <button class="btn secondary" onclick='sendStatementWA()'>إرسال عبر واتساب</button>
+    ${allRows.some(r=>r.status==='paid') ? `<button class="btn secondary" onclick='openMultiReceipt(${JSON.stringify(customer.id)})'>🧾 إيصال لعدة أشهر</button>` : ""}
     ${unpaidCount>0?`<button class="btn secondary" onclick='payAllOverdueForCustomer(${JSON.stringify(customer.id)})'>دفع كل المتأخر (${unpaidCount}) دفعة واحدة</button>`:""}
   </div>
   <div class="panel print-area">
