@@ -55,11 +55,11 @@
   function showScreen(title, msg, buttonLabel){
     document.documentElement.innerHTML =
       '<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>' +
-      '<body style="background:#0f1916;color:#e7edf3;font-family:sans-serif;display:flex;align-items:center;' +
+      '<body style="background:#10161d;color:#e7edf3;font-family:sans-serif;display:flex;align-items:center;' +
       'justify-content:center;min-height:100vh;text-align:center;padding:20px;direction:rtl;margin:0">' +
       '<div><h2 style="margin-bottom:10px">' + title + '</h2>' +
       '<p style="color:#8b9bab;margin-bottom:18px;font-size:14px;max-width:320px">' + msg + '</p>' +
-      '<button onclick="location.reload()" style="background:#3cb984;color:#06231a;border:none;' +
+      '<button onclick="location.reload()" style="background:#38c98f;color:#06231a;border:none;' +
       'padding:10px 20px;border-radius:8px;font-weight:700;cursor:pointer;font-size:14px">' + buttonLabel + '</button></div></body>';
   }
 
@@ -139,7 +139,7 @@
 </script>
 <title>شبكة الموسى للإنترنيت — إدارة الزبائن والدفعات</title>
 <link rel="manifest" href="manifest.json" />
-<meta name="theme-color" content="#0f1916" />
+<meta name="theme-color" content="#10161d" />
 <link rel="icon" href="icon-192.png" />
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 5 L89 27.5 V72.5 L50 95 L11 72.5 V27.5 Z' fill='%231e9e6a' stroke='%231e9e6a' stroke-width='4' stroke-linejoin='round'/%3E%3Cg fill='none' stroke='white' stroke-width='8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M50 46 L34 82 M50 46 L66 82 M39 70 H61'/%3E%3Cpath d='M36 30 Q24 42 36 54'/%3E%3Cpath d='M64 30 Q76 42 64 54'/%3E%3C/g%3E%3Ccircle cx='50' cy='44' r='6.5' fill='white'/%3E%3C/svg%3E" />
 <link rel="apple-touch-icon" href="icon-192.png" />
@@ -150,41 +150,37 @@
 (function(){ try{ if(localStorage.getItem('isp_theme')==='light') document.documentElement.setAttribute('data-theme','light'); }catch(e){} })();
 </script>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Readex+Pro:wght@400;500;600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600&display=swap');
-/* palette: neutrals are tinted from the logo's green; green / amber / red always mean paid / promised / owed */
+@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&family=IBM+Plex+Sans+Arabic:wght@400;500;600&display=swap');
 :root {
-  --bg: #0f1916; --panel: #16231f; --panel-2: #1d2d28; --border: #2a3d37;
-  --text: #e4ede8; --muted: #8da197; --accent: #3cb984; --accent-dim: rgba(60,185,132,0.15); --on-accent: #062117;
-  --warn: #e0a93f; --warn-dim: rgba(224,169,63,0.15); --danger: #e0634f; --danger-dim: rgba(224,99,79,0.15);
-  --display: 'Readex Pro', 'IBM Plex Sans Arabic', sans-serif;
+  --bg: #10161d; --panel: #19222c; --panel-2: #202b37; --border: #2b3948;
+  --text: #e7edf3; --muted: #8b9bab; --accent: #38c98f; --accent-dim: rgba(56,201,143,0.15);
+  --warn: #eab04d; --warn-dim: rgba(234,176,77,0.15); --danger: #e2604f; --danger-dim: rgba(226,96,79,0.15);
 }
 html[data-theme="light"] {
-  --bg: #f2f5f3; --panel: #ffffff; --panel-2: #e9efec; --border: #d6e0db;
-  --text: #12201a; --muted: #56665e; --accent-dim: rgba(23,138,92,0.12); --on-accent: #ffffff;
-  --warn-dim: rgba(168,116,18,0.12); --danger-dim: rgba(194,64,46,0.12);
-  --accent: #178a5c; --warn: #a87412; --danger: #c2402e;
+  --bg: #f4f6f9; --panel: #ffffff; --panel-2: #eef1f5; --border: #dde3ea;
+  --text: #1b232c; --muted: #5b6672; --accent-dim: rgba(30,163,110,0.12);
+  --warn-dim: rgba(200,140,20,0.12); --danger-dim: rgba(200,70,55,0.12);
+  --accent: #1ea36e; --warn: #b9861a; --danger: #c84637;
 }
 * { box-sizing: border-box; }
 body { margin:0; font-family:'IBM Plex Sans Arabic', sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
-h1,h2,h3 { font-family:var(--display); margin:0; font-weight:600; }
-:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+h1,h2,h3 { font-family:'Tajawal', sans-serif; margin:0; }
 #root { display:flex; flex-direction:column; min-height:100vh; width:100%; }
 .topbar { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; padding:12px 20px; background:var(--panel); border-bottom:1px solid var(--border); }
 .topbar-right { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
 .body-row { display:flex; flex:1; width:100%; min-height:0; }
 .sidebar { width:210px; flex-shrink:0; background:var(--panel); border-left:1px solid var(--border); padding:14px; display:flex; flex-direction:column; gap:4px; }
-.brand { font-family:var(--display); font-weight:700; font-size:18px; padding:0 6px; }
-.brand span { color:inherit; }
+.brand { font-family:'Tajawal', sans-serif; font-weight:900; font-size:18px; padding:0 6px; }
+.brand span { color:var(--accent); }
 .nav-btn { text-align:right; background:transparent; border:none; color:var(--muted); padding:10px 12px; border-radius:8px; font-size:14.5px; font-family:inherit; cursor:pointer; }
 .nav-btn:hover { background:var(--panel-2); color:var(--text); }
-.sidebar .nav-btn.active { background:var(--accent-dim); color:var(--text); font-weight:600; box-shadow:inset -3px 0 0 var(--accent); }
+.nav-btn.active { background:var(--accent-dim); color:var(--accent); font-weight:600; }
 .main { flex:1; padding:24px 28px; min-width:0; overflow-x:auto; }
-.page-title { font-size:22px; font-weight:600; margin-bottom:18px; letter-spacing:-.2px; }
-/* the figures sit in one ruled strip, not a wall of separate cards */
-.stat-grid { display:flex; flex-wrap:wrap; gap:1px; background:var(--border); border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:22px; }
-.stat-card { flex:1 1 180px; background:var(--panel); padding:14px 16px; }
+.page-title { font-size:22px; font-weight:900; margin-bottom:18px; }
+.stat-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(160px,1fr)); gap:12px; margin-bottom:22px; }
+.stat-card { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:14px 16px; }
 .stat-card .label { color:var(--muted); font-size:12.5px; margin-bottom:6px; }
-.stat-card .value { font-family:var(--display); font-weight:600; font-size:21px; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.stat-card .value { font-family:'Tajawal', sans-serif; font-weight:900; font-size:22px; }
 .stat-card .sub { color:var(--muted); font-size:11.5px; margin-top:4px; }
 .stat-card.accent .value { color:var(--accent); }
 .stat-card.warn .value { color:var(--warn); }
@@ -193,28 +189,7 @@ h1,h2,h3 { font-family:var(--display); margin:0; font-weight:600; }
 .panel h3 { font-size:15px; margin-bottom:12px; }
 .chart-grid { display:grid; grid-template-columns:1.6fr 1fr; gap:14px; margin-bottom:18px; }
 @media (max-width:900px){ .chart-grid{ grid-template-columns:1fr; } }
-.legend-row { display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--muted); margin-bottom:6px; }
-.legend-dot { display:inline-block; width:10px; height:10px; border-radius:3px; flex-shrink:0; }
-.progress-track { height:10px; background:var(--panel-2); border-radius:5px; overflow:hidden; }
-.progress-fill { height:100%; border-radius:5px; }
-.chart-grid .panel { margin-bottom:0; }
-/* this month's ledger: one square per subscriber, read from the right like the payments book */
-.ledger { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:20px 20px 18px; margin-bottom:14px; }
-.ledger-head { font-family:var(--display); font-size:clamp(19px, 2.4vw, 26px); font-weight:500; line-height:1.4; margin:0 0 14px; max-width:36ch; }
-.ledger-head b { font-weight:700; font-variant-numeric:tabular-nums; }
-.ledger-head small { display:block; font-family:'IBM Plex Sans Arabic', sans-serif; font-size:13px; font-weight:400; color:var(--muted); margin-top:2px; }
-.ledger-grid { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:14px; }
-.ledger-cell { width:22px; height:22px; border-radius:5px; border:none; padding:0; cursor:pointer; background:var(--danger); transition:transform .12s ease; }
-.ledger-cell.paid { background:var(--accent); }
-.ledger-cell.promised { background:var(--warn); }
-.ledger-cell.notyet { background:transparent; box-shadow:inset 0 0 0 1.5px var(--border); }
-.ledger-cell:hover { transform:scale(1.18); }
-.ledger-cell.picked { outline:2px solid var(--text); outline-offset:2px; }
-.ledger-key { display:flex; flex-wrap:wrap; gap:6px 18px; }
-.ledger-key .legend-row { margin:0; font-size:13px; }
-.ledger-key b { color:var(--text); font-weight:600; font-variant-numeric:tabular-nums; }
-@media (prefers-reduced-motion: reduce){ .ledger-cell{ transition:none; } }
-table { width:100%; border-collapse:collapse; font-size:13.5px; font-variant-numeric:tabular-nums; }
+table { width:100%; border-collapse:collapse; font-size:13.5px; }
 th,td { text-align:right; padding:9px 10px; border-bottom:1px solid var(--border); }
 th { color:var(--muted); font-weight:500; font-size:12.5px; }
 tr:last-child td { border-bottom:none; }
@@ -245,7 +220,7 @@ tr:last-child td { border-bottom:none; }
 .pill.ok { background:var(--accent-dim); color:var(--accent); }
 .pill.late { background:var(--danger-dim); color:var(--danger); }
 .pill.warn { background:var(--warn-dim); color:var(--warn); }
-.btn { background:var(--accent); color:var(--on-accent); border:none; padding:8px 16px; border-radius:8px; font-weight:700; font-size:13.5px; cursor:pointer; font-family:inherit; }
+.btn { background:var(--accent); color:#06231a; border:none; padding:8px 16px; border-radius:8px; font-weight:700; font-size:13.5px; cursor:pointer; font-family:inherit; }
 .btn.secondary { background:var(--panel-2); color:var(--text); border:1px solid var(--border); }
 .btn.danger { background:var(--danger-dim); color:var(--danger); }
 .btn.small { padding:5px 11px; font-size:12.5px; }
@@ -276,9 +251,8 @@ input, select { background:var(--panel-2); border:1px solid var(--border); color
 .section-heading { display:flex; align-items:baseline; justify-content:space-between; margin-bottom:12px; }
 .count-badge { color:var(--muted); font-size:12px; }
 .login-wrap { display:flex; align-items:center; justify-content:center; min-height:100vh; width:100%; }
-.login-box { background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:32px; width:340px; text-align:center; }
-.login-box input, .login-box label { text-align:right; }
-.login-box h1 { font-size:24px; font-weight:700; margin-bottom:4px; }
+.login-box { background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:32px; width:320px; }
+.login-box h1 { font-size:20px; margin-bottom:4px; }
 .login-box p { color:var(--muted); font-size:13px; margin:0 0 18px; }
 .login-box input { width:100%; margin-bottom:10px; }
 .login-box .btn { width:100%; }
@@ -288,6 +262,21 @@ input, select { background:var(--panel-2); border:1px solid var(--border); color
 .sidebar-spacer { flex:1; }
 .sidebar-user-info { color:var(--muted); font-size:12px; padding:8px 12px; }
 .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.55); display:flex; align-items:center; justify-content:center; z-index:1000; padding:16px; }
+.undo-bar { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); z-index:2600; display:flex; align-items:center; gap:12px; background:#1f2a36; color:#fff; border:1px solid #3a4a5c; border-radius:10px; padding:8px 10px 8px 14px; box-shadow:0 6px 20px rgba(0,0,0,0.45); max-width:94vw; overflow:hidden; font-size:13px; }
+.undo-bar-text { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:60vw; }
+.undo-bar-btn { background:#f2b33d !important; color:#1b1b1b !important; border:none !important; font-weight:700; white-space:nowrap; }
+.undo-bar-time { position:absolute; left:0; bottom:0; height:3px; width:100%; background:#f2b33d; transform-origin:left; animation:undoTime 10s linear forwards; }
+@keyframes undoTime { from{ transform:scaleX(1);} to{ transform:scaleX(0);} }
+.undo-hint { font-size:12px; color:var(--muted, #8a97a6); margin-bottom:10px; line-height:1.6; }
+.undo-list { display:flex; flex-direction:column; gap:6px; max-height:420px; overflow-y:auto; }
+.undo-item { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 10px; border:1px solid var(--border); border-radius:8px; }
+.undo-main { min-width:0; } .undo-label { font-size:13px; overflow-wrap:anywhere; } .undo-meta { font-size:11px; color:var(--muted, #8a97a6); margin-top:2px; }
+.undo-item.undo-done { opacity:.5; }
+.mt-acts { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+.mt-acts .btn { white-space:nowrap; }
+.mt-sec { margin-top:10px; } .mt-sec summary { cursor:pointer; font-size:13.5px; font-weight:600; padding:6px 0; }
+.mt-sec .undo-list { margin-top:6px; }
+.undo-bar ~ .isp-toast { bottom:76px; }
 .isp-toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--panel-2); border:1px solid var(--border); color:var(--text); padding:10px 18px; border-radius:8px; font-size:13px; z-index:2000; box-shadow:0 4px 14px rgba(0,0,0,0.35); max-width:90vw; text-align:center; }
 .offline-banner { background:var(--warn-dim); color:var(--warn); font-size:12.5px; padding:6px 16px; text-align:center; }
 .install-icon-row { display:flex; align-items:center; gap:12px; margin-bottom:14px; }
@@ -304,19 +293,15 @@ input, select { background:var(--panel-2); border:1px solid var(--border); color
   .topbar{ padding:10px 12px; }
   .topbar .brand{ font-size:16px; }
   .sidebar{
-    width:100%; flex-direction:row; flex-wrap:nowrap; align-items:center;
-    overflow-x:auto; border-left:none; border-bottom:1px solid var(--border);
-    padding:8px 12px; gap:4px; scrollbar-width:none;
+    width:100%; flex-direction:row; flex-wrap:wrap; align-items:center;
+    overflow-x:visible; border-left:none; border-bottom:1px solid var(--border);
+    padding:10px 12px; gap:6px;
   }
-  .sidebar::-webkit-scrollbar{ display:none; }
-  .sidebar .nav-btn{ white-space:nowrap; flex-shrink:0; }
-  .sidebar .nav-btn.active{ box-shadow:inset 0 -2px 0 var(--accent); }
-  .ledger{ padding:16px 14px 14px; }
-  .ledger-cell{ width:20px; height:20px; }
   .nav-btn, .theme-toggle-btn{ padding:8px 10px; font-size:13px; }
   .main{ padding:12px; }
   .page-title{ font-size:18px; }
-  .stat-card{ flex-basis:140px; padding:10px 12px; }
+  .stat-grid{ grid-template-columns:repeat(2, 1fr); gap:8px; }
+  .stat-card{ padding:10px 12px; }
   .stat-card .value{ font-size:18px; }
   .form-row{ flex-direction:column; align-items:stretch; }
   .form-row > div{ width:100%; min-width:0; }
@@ -331,6 +316,9 @@ input, select { background:var(--panel-2); border:1px solid var(--border); color
   #payments-grid-wrap td.col-sticky-1 div:first-child{ font-size:11.5px; }
   #payments-grid-wrap td.col-sticky-1 div:last-child{ font-size:10px; }
   #payments-grid-wrap table{ min-width:760px; }
+}
+@media (max-width:420px){
+  .stat-grid{ grid-template-columns:1fr; }
 }
 #pdf-export{ display:none; }
 @media print {
@@ -362,7 +350,7 @@ input, select { background:var(--panel-2); border:1px solid var(--border); color
 </style>
 </head>
 <body>
-<div id="root"><div style="min-height:100vh;display:flex;align-items:center;justify-content:center"><svg viewBox="0 0 100 100" width="80" height="80" role="status" aria-label="جارِ التحميل"><style>@keyframes ll0{to{stroke-dashoffset:-1}}</style><path d="M50 5 L89 27.5 V72.5 L50 95 L11 72.5 V27.5 Z" fill="none" stroke="#3cb984" stroke-opacity=".18" stroke-width="3" stroke-linejoin="round"/><path d="M50 5 L89 27.5 V72.5 L50 95 L11 72.5 V27.5 Z" fill="none" stroke="#3cb984" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" pathLength="1" stroke-dasharray="0.16 0.84" style="animation:ll0 1.4s linear infinite"/></svg></div></div>
+<div id="root"><div style="min-height:100vh;display:flex;align-items:center;justify-content:center"><svg viewBox="0 0 100 100" width="80" height="80" role="status" aria-label="جارِ التحميل"><style>@keyframes ll0{to{stroke-dashoffset:-1}}</style><path d="M50 5 L89 27.5 V72.5 L50 95 L11 72.5 V27.5 Z" fill="none" stroke="#38c98f" stroke-opacity=".18" stroke-width="3" stroke-linejoin="round"/><path d="M50 5 L89 27.5 V72.5 L50 95 L11 72.5 V27.5 Z" fill="none" stroke="#38c98f" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" pathLength="1" stroke-dasharray="0.16 0.84" style="animation:ll0 1.4s linear infinite"/></svg></div></div>
 
 <script>
 // ======================= CONFIG =======================
@@ -433,12 +421,14 @@ function holdEnd(btn){
 
 // ======================= VERSION =======================
 // Raise this number together with SERVER_VERSION in Code.gs on every update.
-const APP_VERSION = "1.4";
-const APP_VERSION_DATE = "2026-10-14";
+const APP_VERSION = "1.6";
+const APP_VERSION_DATE = "2026-11-06";
 // the lowest Code.gs version this page works with (raise it only when the page needs something new from the server)
-const MIN_SERVER_VERSION = "1.1";
+const MIN_SERVER_VERSION = "1.4";
 const CHANGELOG = [
-  { v:"1.4", date:"2026-10-14", notes:"زر «🧾 إيصال لعدة أشهر» في كشف الحساب: تختار الأشهر المدفوعة (ما دُفع اليوم محدّد تلقائيًا) فيخرج إيصال واحد بها ومجموعها. (الصفحة فقط)" },
+  { v:"1.6", date:"2026-11-06", notes:"مكافأة الملتزمين: قسم «🎁 مكافأة الملتزمين» في صفحة الدفعات يعرض الزبون النشط المسدِّد حتى الشهر الحالي (يُستثنى من اشترك هذا الشهر) مع رسالة واتساب جاهزة باسمه وسرعته المضاعفة حتى نهاية الشهر. يُسجَّل من أُرسلت له المكافأة؛ من سدّد الشهر التالي تظهر له ملاحظة «مضاعف من الشهر السابق» ويتفعّل زر «إعادة إرسال المكافأة» برسالة تمديد. قائمة «انتهت مضاعفتهم ولم يسددوا» لتذكيرك بإرجاع السرعة. (يحتاج الخادم 1.4)" },
+  { v:"1.5", date:"2026-11-01", notes:"ربط المايكروتك: الراوتر يرسل حالة حسابات البرودباند كل 15 دقيقة. تعطيل حساب = «⛔ موقوف لعدم الدفع» إن كان عليه دين، وإلا «🚪 متوقف» مع سؤالك عن السبب. التفعيل يعيده نشطًا. الأشهر أثناء الإيقاف لا تُحتسب (شهر الإيقاف يبقى عليه). قائمة «الموقوفون لعدم الدفع» في الرئيسية، وقسم «مزامنة المايكروتك» في صفحة الزبائن (حالة مختلفة، سرعة مختلفة، حسابات غير متطابقة). السكربت من صفحة المستخدمين. (يحتاج الخادم 1.3)" },
+  { v:"1.4", date:"2026-10-14", notes:"زر «↩ تراجع» يظهر 10 ثوانٍ بعد كل حفظ (دفعة، «دفع الكل» كعملية واحدة، تعديل/إضافة/تعطيل/حذف زبون، حركة صندوق، جرد، تذكير ووعد). وفي «سجل النشاط» قائمة بآخر العمليات للتراجع عنها بالضغط المطوّل: المدير عن أي عملية، والمحاسب عن عملياته هو ومن اليوم فقط. يُرفض التراجع إذا عدّل أحد السطر بعدها. + زر «🧾 إيصال لعدة أشهر» في كشف الحساب. (يحتاج الخادم 1.2)" },
   { v:"1.3", date:"2026-10-14", notes:"شعار الشبكة (برج إرسال) في الرأس وشاشة الدخول والإيصال وأيقونة الجوال، ومؤشر تحميل بالشعار. الحذف النهائي (زبون، حركة صندوق، مستخدم، تغيير مرفوض) وزر «دفع كل المتأخر» صارت بالضغط المطوّل بدل نافذة التأكيد. أزرار ملموسة تنخفض عند الضغط. (الصفحة والأيقونتان فقط، Code.gs لم يتغير)" },
   { v:"1.2", date:"2026-10-14", notes:"إيصال دفع صورة للزبون على واتساب: يظهر بعد تسجيل أي دفعة أو دفع كل المتأخر، وبزر 🧾 في كشف الحساب. فيه رقم الإيصال والأشهر والمبلغ ومن استلم والدين المتبقي. (الصفحة فقط، Code.gs لم يتغير)" },
   { v:"1.1", date:"2026-10-14", notes:"أول إصدار مرقّم. يشمل: الجرد الشهري للصندوقين مع كسر الصندوق وكسر التحصيل، قواعد الدولار (تسليم محمد بالدولار يُطرح من ليراته بسعره، وفواتير الدولار تُطرح من الدولار)، تصدير الدفعات PDF، تذكير واتساب في صفحة الدفعات، البحث في الرئيسية، دعم السنوات، كلمات سر بنص عادي." },
@@ -561,7 +551,7 @@ function buildConfirmMessage(c, monthLabel, amount){
 function buildStatementMessage(c, rows, totalPaid, totalDue){
   const lines = rows.map(r => {
     if(r.status==='paid') return `${r.label}: مدفوع (${fmtMoney(r.amount)}) بتاريخ ${isoToDateStr(r.date)}`;
-    if(r.status==='not_subscribed') return `${r.label}: غير مشترك`;
+    if(r.status==='not_subscribed') return `${r.label}: ${r.stopped ? "موقوف" : "غير مشترك"}`;
     if(r.status==='not_due_yet') return `${r.label}: لم يحن موعده بعد`;
     return `${r.label}: غير مدفوع`;
   });
@@ -617,11 +607,12 @@ function sanitizeCustomers(list){
     address: String(c.address==null?"":c.address),
     mikrotik: String(c.mikrotik==null?"":c.mikrotik),
     notes: String(c.notes==null?"":c.notes),
+    rewards: rwOf(c),
   }));
 }
 
 // ======================= API =======================
-async function api(action, payload={}){
+async function api(action, payload={}, opts={}){
   // the server decides who you are from this token; the page can no longer claim a name or a role
   const body = { action, payload };
   if(state.user && state.user.token) body.token = state.user.token;
@@ -633,6 +624,7 @@ async function api(action, payload={}){
     });
     const data = await res.json();
     if(data && data.authError) handleAuthExpired();
+    if(data && data.ok && data.undoId && !payload.undoGroup && !opts.quiet) showUndoBar({id:data.undoId}, data.undoLabel);
     return data;
   } catch(e){
     return { ok:false, networkError:true, error:"تعذر الاتصال بالخادم. تحقق من الإنترنت." };
@@ -660,6 +652,332 @@ function showToast(msg, ms=2200){
   el.textContent = msg;
   document.body.appendChild(el);
   setTimeout(()=>{ if(el && el.parentNode) el.remove(); }, ms);
+}
+
+
+// ======================= CUSTOMER STATUS + MIKROTIK SYNC =======================
+function isStoppedMonth(c, key){
+  const s = c && Array.isArray(c.stops) ? c.stops : [];
+  for(const p of s){ if(p && key >= p.f && (!p.t || key <= p.t)) return true; }
+  return false;
+}
+function custStatusText(c){
+  if(c.active!==false) return "نشط";
+  return c.stopReason==='debt' ? "موقوف لعدم الدفع" : c.stopReason==='left' ? "متوقف" : "معطّل";
+}
+function custPill(c){
+  if(c.active!==false) return '<span class="pill ok">نشط</span>';
+  if(c.stopReason==='debt') return '<span class="pill late">⛔ موقوف لعدم الدفع</span>';
+  if(c.stopReason==='left') return '<span class="pill">🚪 متوقف</span>';
+  return '<span class="pill">معطّل</span>';
+}
+function stopSinceText(c){
+  const s = (c.stops||[]).filter(p=>p && !p.t).pop();
+  if(!s) return "";
+  const m = s.f ? addMonths(s.f, -1) : "";
+  return m ? `منذ ${monthLabelOf(m)}${s.s==='mt' ? " (من المايكروتك)" : ""}` : "";
+}
+function addMonths(key, n){
+  let y = +key.slice(0,4), m = +key.slice(5,7) - 1 + n;
+  y += Math.floor(m/12); m = ((m%12)+12)%12;
+  return `${y}-${String(m+1).padStart(2,"0")}`;
+}
+async function setCustStatus(id, status){
+  const r = await api("setCustomerStatus", {id, status});
+  if(r.networkError){ alert("لا يوجد اتصال — أعد المحاولة."); return; }
+  if(!r.ok){ alert(r.error || "تعذر الحفظ"); return; }
+  await loadAllData();
+}
+function reasonButtons(c){
+  const id = JSON.stringify(c.id);
+  return `<button class="btn secondary small" onclick='setCustStatus(${id},"debt")'>⛔ لعدم الدفع</button>
+          <button class="btn secondary small" onclick='setCustStatus(${id},"left")'>🚪 متوقف</button>`;
+}
+function suspendedDebtors(){
+  return state.customers.filter(c=>c.active===false && c.stopReason==='debt').map(statsFor).sort((a,b)=>b.debtAmount-a.debtAmount);
+}
+function reasonCheckList(){ return state.customers.filter(c=>c.active===false && c.reasonCheck); }
+
+function speedFromProfile(p){
+  const m = String(p||"").match(/(\d+(?:\.\d+)?)/);
+  return m ? Number(m[1]) : null;
+}
+function mtNorm(s){ return String(s||"").trim().toLowerCase(); }
+function mtReport(){
+  const mt = state.mt || {};
+  const accounts = Array.isArray(mt.accounts) ? mt.accounts : [];
+  const byName = {}; accounts.forEach(a=>{ byName[mtNorm(a[0])] = a; });
+  const used = {};
+  const mismatch = [], speedDiff = [], noAccount = [];
+  state.customers.forEach(c=>{
+    const a = byName[mtNorm(c.mikrotik)];
+    if(!a){ if(accounts.length) noAccount.push(c); return; }
+    used[mtNorm(c.mikrotik)] = true;
+    const off = a[1]===1;
+    if(c.active!==false && off) mismatch.push({c, appTxt:"نشط", mtTxt:"معطّل", fix:"off"});
+    if(c.active===false && !off) mismatch.push({c, appTxt:custStatusText(c), mtTxt:"فعّال", fix:"active"});
+    const sp = speedFromProfile(a[2]);
+    if(sp!==null && Number(c.speed)!==sp) speedDiff.push({c, profile:a[2], sp});
+  });
+  const unknown = accounts.filter(a=>!used[mtNorm(a[0])]);
+  return { mt, accounts, mismatch, speedDiff, noAccount, unknown };
+}
+async function adoptMtSpeed(id, sp){
+  if(state.pricing[sp]===undefined){ alert(`لا يوجد سعر لسرعة ${sp} ميغا. أضفها من صفحة الأسعار أولًا.`); return; }
+  const r = await api("editCustomer", {id, patch:{speed:sp}});
+  if(!r.ok){ alert(r.error || "تعذر الحفظ"); return; }
+  await loadAllData();
+}
+function mtLastText(mt){
+  if(!mt || !mt.last) return "لم تصل أي مزامنة بعد";
+  const mins = Math.round((Date.now() - new Date(mt.last).getTime())/60000);
+  return mins < 1 ? "آخر مزامنة: الآن" : mins < 60 ? `آخر مزامنة: قبل ${mins} دقيقة` : `آخر مزامنة: ${formatLogTime(mt.last)}`;
+}
+function renderMtPanel(){
+  const R = mtReport(), mt = R.mt;
+  const isAdmin = state.user && state.user.role==="admin";
+  const checks = reasonCheckList();
+  if(!mt.last && !checks.length){
+    return `<div class="panel mt-panel"><h3 style="margin:0 0 6px">🔄 مزامنة المايكروتك</h3>
+      <div class="undo-hint">لم تصل أي مزامنة من الراوتر بعد.${isAdmin ? " الإعداد من صفحة «المستخدمون» ← «ربط المايكروتك»." : ""}</div></div>`;
+  }
+  const late = mt.last && (Date.now() - new Date(mt.last).getTime()) > 60*60000;
+  const row = (main, sub, acts) => `<div class="undo-item"><div class="undo-main"><div class="undo-label">${main}</div>${sub?`<div class="undo-meta">${sub}</div>`:""}</div><div class="mt-acts">${acts||""}</div></div>`;
+  const sec = (title, n, body, open) => n ? `<details class="mt-sec" ${open?"open":""}><summary>${title} <span class="count-badge">${n}</span></summary><div class="undo-list">${body}</div></details>` : "";
+  const id = c => JSON.stringify(c.id);
+  return `<div class="panel mt-panel">
+    <div class="section-heading"><h3 style="margin:0">🔄 مزامنة المايكروتك</h3>
+      <span class="undo-meta">${mt.enabled===false ? '<span class="pill">متوقفة</span> ' : ""}${escAttr(mtLastText(mt))} · ${R.accounts.length} حساب</span></div>
+    ${late ? `<div class="offline-banner" style="margin:8px 0">⚠ مرّت أكثر من ساعة بلا مزامنة — تأكد أن الراوتر متصل وأن سكربت NC_SyncSecrets يعمل.</div>` : ""}
+    ${sec("⚠ تعطّلوا بدون دين — ما السبب؟", checks.length, checks.map(c=>row(escAttr(c.name), `${escAttr(c.mikrotik||"—")} · ${stopSinceText(c)} · اعتُبر «متوقف» مؤقتًا`, reasonButtons(c))).join(""), true)}
+    ${sec("الحالة مختلفة بين التطبيق والمايكروتك", R.mismatch.length, R.mismatch.map(x=>row(escAttr(x.c.name), `التطبيق: ${x.appTxt} · المايكروتك: ${x.mtTxt}`, `<button class="btn secondary small" onclick='setCustStatus(${id(x.c)},"${x.fix}")'>طبّق حالة المايكروتك</button>`)).join(""), true)}
+    ${sec("السرعة مختلفة", R.speedDiff.length, R.speedDiff.map(x=>row(escAttr(x.c.name), `المايكروتك: ${escAttr(x.profile)} · التطبيق: ${x.c.speed} ميغا`, `<button class="btn secondary small" onclick='adoptMtSpeed(${id(x.c)},${x.sp})'>اعتمد ${x.sp} ميغا</button>`)).join(""), false)}
+    ${sec("حسابات في المايكروتك غير موجودة في التطبيق", R.unknown.length, R.unknown.map(a=>row(escAttr(a[0]), `${a[1]===1?"معطّل":"فعّال"} · ${escAttr(a[2]||"")}`, "")).join(""), false)}
+    ${sec("زبائن بلا حساب مطابق في المايكروتك", R.noAccount.length, R.noAccount.map(c=>row(escAttr(c.name), `حساب التطبيق: ${escAttr(c.mikrotik||"فارغ")} — صحّح الاسم ليطابق المايكروتك تمامًا`, `<button class="btn secondary small" onclick='openCustomerEditModal(${id(c)})'>تعديل</button>`)).join(""), false)}
+    ${!checks.length && !R.mismatch.length && !R.speedDiff.length && !R.unknown.length && !R.noAccount.length ? `<div class="undo-hint" style="margin:8px 0 0">كل الحسابات متطابقة ✓</div>` : ""}
+  </div>`;
+}
+
+// ---- admin: router script ----
+function mtScriptText(key){
+  const url = APPS_SCRIPT_URL;
+  return String.raw`/system scheduler remove [find name=NC_SyncSecrets]
+/system script remove [find name=NC_SyncSecrets]
+/system script add name=NC_SyncSecrets policy=read,write,policy,test dont-require-permissions=yes source={
+:local url "${url}"
+:local key "${key}"
+:local body ""
+:foreach s in=[/ppp secret find] do={
+  :local n [/ppp secret get $s name]
+  :local p [/ppp secret get $s profile]
+  :local np ($n . $p)
+  :if (([:typeof [:find $np "\""]] = "nil") && ([:typeof [:find $np "\\"]] = "nil")) do={
+    :local dv 0
+    :if ([/ppp secret get $s disabled]) do={ :set dv 1 }
+    :if ([:len $body] > 0) do={ :set body ($body . ",") }
+    :set body ($body . "[\"" . $n . "\"," . $dv . ",\"" . $p . "\"]")
+  }
+}
+:set body ("{\"action\":\"mtSync\",\"payload\":{\"key\":\"" . $key . "\",\"s\":[" . $body . "]}}")
+:do { /tool fetch url=$url http-method=post http-header-field="Content-Type: text/plain" http-data=$body output=none } on-error={}
+}
+/system scheduler add name=NC_SyncSecrets interval=15m start-time=startup on-event="/system script run NC_SyncSecrets"
+/system script run NC_SyncSecrets`;
+}
+async function loadMtSetup(regen){
+  state.mtSetupLoading = true; render();
+  const r = await api("getMtSetup", regen ? {regen:true} : {});
+  state.mtSetupLoading = false;
+  if(r.ok){ state.mtSetup = r; state.mt = r.info; } else alert(r.error || "تعذر التحميل — تأكد أن الخادم 1.3");
+  render();
+}
+async function regenMtKey(confirmed){ if(!confirmed && !confirm("مفتاح جديد؟ السكربت القديم على الراوتر سيتوقف حتى تلصق الجديد.")) return; await loadMtSetup(true); }
+async function toggleMtSync(){
+  const on = !(state.mt && state.mt.enabled===false);
+  const r = await api("setMtSync", {enabled:!on});
+  if(r.ok){ state.mt = r.info; showToast(!on ? "المزامنة تعمل ✓" : "المزامنة متوقفة"); render(); } else alert(r.error);
+}
+async function copyMtScript(){
+  const t = document.getElementById("mt-script");
+  if(!t) return;
+  try{ await navigator.clipboard.writeText(t.value); showToast("نُسخ السكربت ✓"); }
+  catch(e){ t.select(); document.execCommand && document.execCommand("copy"); showToast("نُسخ السكربت ✓"); }
+}
+function renderMtSetupPanel(){
+  const s = state.mtSetup, mt = state.mt || {};
+  return `<div class="panel">
+    <h3>ربط المايكروتك</h3>
+    <div class="undo-hint">الراوتر يرسل حسابات البرودباند كل 15 دقيقة (قراءة فقط، لا يغيّر شيئًا على الراوتر). عند تعطيل حساب يصبح الزبون «موقوف لعدم الدفع» إن كان عليه دين، وإلا «متوقف» مع سؤالك. عند تفعيله يعود نشطًا. الأشهر أثناء الإيقاف لا تُحتسب.</div>
+    <div style="font-size:13px;margin-bottom:10px">${escAttr(mtLastText(mt))} · الحالة: ${mt.enabled===false ? '<span class="pill">متوقفة</span>' : '<span class="pill ok">تعمل</span>'}
+      <button class="btn secondary small" onclick="toggleMtSync()">${mt.enabled===false ? "تشغيل المزامنة" : "إيقاف المزامنة"}</button></div>
+    ${!s ? `<button class="btn secondary" onclick="loadMtSetup()">${state.mtSetupLoading ? "جارِ التحميل..." : "إظهار سكربت الراوتر"}</button>` : `
+      <div class="undo-hint">انسخه والصقه كما هو في Terminal في Winbox (New Terminal). يعمل فورًا مرة ثم كل 15 دقيقة. لتحديث التطبيق فور أمر من البوت أضف في سكربت البوت بعد التعطيل/التفعيل: <code>/system script run NC_SyncSecrets</code></div>
+      <textarea id="mt-script" readonly dir="ltr" style="width:100%;height:220px;font-family:monospace;font-size:11px">${escAttr(mtScriptText(s.key))}</textarea>
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"><button class="btn" onclick="copyMtScript()">📋 نسخ السكربت</button>${holdBtn("مفتاح جديد","regenMtKey",[],{small:true})}</div>`}
+  </div>`;
+}
+
+
+// ======================= REWARD: مكافأة مضاعفة السرعة للملتزمين =======================
+function rwOf(c){ const r = (c && c.rewards) || {}; return { s: Array.isArray(r.s)?r.s:[], x: Array.isArray(r.x)?r.x:[] }; }
+function rwMonthName(key){ return ARABIC_MONTHS[Number(String(key).slice(5,7))-1] || key; }
+function rwPrev(){ return addMonths(currentMonthKey, -1); }
+function rwLastSent(c){ const s = rwOf(c).s.filter(m=>m<=currentMonthKey); return s.length ? s[s.length-1] : ""; }
+// the speed is still doubled from an earlier month and nobody confirmed it was set back
+function rwStillDoubled(c){
+  const last = rwLastSent(c), r = rwOf(c);
+  return !!last && last < currentMonthKey && !r.x.some(m=>m>last);
+}
+function rwEligible(c){
+  if(c.active===false) return false;
+  if(c.joinMonth && c.joinMonth >= currentMonthKey) return false;   // joined this month: no payment history yet
+  const st = statsFor(c);
+  if(st.unpaidCount>0) return false;
+  const rec = state.payments[`${c.id}:${currentMonthKey}`];
+  return !!(rec && rec.status==='paid');
+}
+function rewardLists(){
+  const eligible = [], revert = [];
+  state.customers.forEach(c=>{
+    if(rwEligible(c)) eligible.push(c);
+    else if(rwStillDoubled(c)) revert.push(c);
+  });
+  const byName = (a,b)=>String(a.name).localeCompare(String(b.name), "ar");
+  return { eligible: eligible.sort(byName), revert: revert.sort(byName) };
+}
+function rwIsContinuing(c){ return rwLastSent(c)===rwPrev() && rwStillDoubled(c); }
+function rwSpeedText(c){ const s = Number(c.speed)||0; return { from:s, to:s*2 }; }
+function buildRewardMessage(c){
+  const sp = rwSpeedText(c), name = rwMonthName(currentMonthKey);
+  if(rwIsContinuing(c)){
+    return `مرحبًا ${c.name} 🌟
+لالتزامك المستمر بالتسديد، تم تمديد مضاعفة سرعة اشتراكك (${sp.to} ميغا) حتى نهاية شهر ${name}.
+شكرًا لثقتك بشبكة الموسى للإنترنت 🙏`;
+  }
+  return `مرحبًا ${c.name} 🌟
+شكرًا لالتزامك بتسديد اشتراكك أول بأول. تقديرًا لذلك تمت مضاعفة سرعة اشتراكك من ${sp.from} إلى ${sp.to} ميغا حتى نهاية شهر ${name}.
+شبكة الموسى للإنترنت 🙏`;
+}
+function rwNoteText(c){
+  const last = rwLastSent(c), r = rwOf(c);
+  if(!last || last >= currentMonthKey) return "";
+  if(r.x.some(m=>m>last)) return `سبق أن ضوعفت سرعته (${rwMonthName(last)}) وأُعيدت`;
+  if(last===rwPrev()) return `🔁 سرعته مضاعفة من الشهر السابق (${rwMonthName(last)})`;
+  return `⚠ مضاعف منذ ${monthLabelOf(last)} ولم تؤكد إرجاع سرعته`;
+}
+async function recordReward(id, kind){
+  const month = currentMonthKey;
+  const c0 = state.customers.find(x=>x.id===id); if(!c0) return;
+  const r = rwOf(c0), list = kind==="sent" ? r.s : r.x;
+  if(list.includes(month)) return;
+  const next = { s:[...r.s], x:[...r.x] };
+  (kind==="sent" ? next.s : next.x).push(month);
+  patchCustomerLocal(id, { rewards: next });
+  render();
+  const payload = {id, month, kind};
+  const res = await api("setReward", payload);
+  if(res.networkError){ queueOutbox("setReward", payload); showToast("لا يوجد اتصال — سيُسجَّل عند عودة الإنترنت"); return; }
+  if(!res.ok){ showToast(res.error || "تعذر تسجيل المكافأة"); await loadAllData(true); }
+}
+function sendReward(id){
+  const base = state.customers.find(x=>x.id===id);
+  if(!base) return;
+  if(!rwEligible(base)){ alert(`${base.name} لم يعد مستوفيًا لشرط المكافأة (يجب أن يكون نشطًا ومسدّدًا حتى الشهر الحالي).`); render(); return; }
+  if(!String(base.phone||"").replace(/\D/g,"")){ openCustomerEditModal(id, { askPhone:true }); return; }
+  window.open(waLink(base.phone, buildRewardMessage(base)), "_blank");
+  recordReward(id, "sent");
+}
+function confirmRevertSpeed(id){ recordReward(id, "revert"); }
+function renderRewardPanel(){
+  const { eligible, revert } = rewardLists();
+  const pending = eligible.filter(c=>!rwOf(c).s.includes(currentMonthKey)).length;
+  const id = c => JSON.stringify(c.id);
+  const row = (main, sub, acts) => `<div class="undo-item"><div class="undo-main"><div class="undo-label">${main}</div>${sub?`<div class="undo-meta">${sub}</div>`:""}</div><div class="mt-acts">${acts||""}</div></div>`;
+  const elRows = eligible.map(c=>{
+    const sp = rwSpeedText(c), sent = rwOf(c).s.includes(currentMonthKey), note = rwNoteText(c);
+    const acts = sent
+      ? `<span class="pill ok">أُرسلت ✓</span><button class="btn secondary small" onclick='sendReward(${id(c)})'>↻ إعادة إرسال</button>`
+      : `<button class="btn small" onclick='sendReward(${id(c)})'>🎁 ${rwIsContinuing(c) ? "إعادة إرسال المكافأة" : "إرسال المكافأة"}</button>`;
+    return row(escAttr(c.name), `${sp.from} ← ${sp.to} ميغا${c.mikrotik ? " · "+escAttr(c.mikrotik) : ""}${note ? "<br/>"+note : ""}`, acts);
+  }).join("");
+  const rvRows = revert.map(c=>{
+    const last = rwLastSent(c);
+    const why = c.active===false ? "غير نشط" : `لم يسدد ${rwMonthName(currentMonthKey)} بعد`;
+    return row(escAttr(c.name), `مضاعف في ${rwMonthName(last)} · ${why}${c.mikrotik ? " · "+escAttr(c.mikrotik) : ""}`, `<button class="btn secondary small" onclick='confirmRevertSpeed(${id(c)})'>✓ أرجعت السرعة</button>`);
+  }).join("");
+  return `<details class="panel mt-sec" ${pending||revert.length ? "open":""}>
+    <summary style="font-size:15px">🎁 مكافأة الملتزمين — مضاعفة السرعة <span class="count-badge">${eligible.length}</span>${revert.length?` <span class="pill late">${revert.length} لإرجاع سرعتهم</span>`:""}</summary>
+    <div class="undo-hint" style="margin-top:6px">يظهر هنا الزبون النشط الذي سدّد كل أشهره حتى ${rwMonthName(currentMonthKey)} ضمنًا (يُستثنى من اشترك هذا الشهر). التطبيق يرسل الرسالة ويسجّل من ضوعفت سرعته فقط؛ المضاعفة نفسها تضعها من البوت. من سدّد الشهر التالي تفعّل له «إعادة إرسال المكافأة» وتظهر ملاحظة أنه مضاعف من الشهر السابق.</div>
+    ${eligible.length ? `<div class="undo-list">${elRows}</div>` : `<div class="empty">لا يوجد زبائن مستوفون للشرط حاليًا</div>`}
+    ${revert.length ? `<h3 style="margin:14px 0 4px;font-size:14px">⏳ انتهت مضاعفتهم ولم يسددوا</h3>
+      <div class="undo-hint">أرجع سرعتهم إلى الطبيعية من البوت ثم اضغط «أرجعت السرعة»، وإن سدّدوا لاحقًا يعودون إلى القائمة أعلاه.</div>
+      <div class="undo-list">${rvRows}</div>` : ""}
+  </details>`;
+}
+
+// ======================= UNDO (تراجع) =======================
+const UNDO_BAR_MS = 10000;
+let undoBarTimer = null;
+function hideUndoBar(){
+  clearTimeout(undoBarTimer);
+  const old = document.getElementById('undo-bar');
+  if(old) old.remove();
+}
+function showUndoBar(ref, label){
+  hideUndoBar();
+  const el = document.createElement('div');
+  el.id = 'undo-bar';
+  el.className = 'undo-bar no-print';
+  const txt = document.createElement('span');
+  txt.className = 'undo-bar-text';
+  txt.textContent = '✓ ' + (label || 'تم الحفظ');
+  const btn = document.createElement('button');
+  btn.className = 'btn small undo-bar-btn';
+  btn.textContent = '↩ تراجع';
+  btn.onclick = ()=>undoNow(ref);
+  const bar = document.createElement('i');
+  bar.className = 'undo-bar-time';
+  el.appendChild(txt); el.appendChild(btn); el.appendChild(bar);
+  document.body.appendChild(el);
+  undoBarTimer = setTimeout(hideUndoBar, UNDO_BAR_MS);
+}
+function newUndoGroup(){ return "g-" + Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+async function undoNow(ref){
+  hideUndoBar();
+  showToast("جارِ التراجع...", 60000);
+  const r = await api("undoAction", ref);
+  hideToast();
+  if(r.networkError){ alert("لا يوجد اتصال — التراجع يحتاج الإنترنت. جرّب مرة أخرى."); return false; }
+  if(!r.ok){ alert(r.error || "تعذر التراجع"); return false; }
+  showToast("تم التراجع ✓");
+  closeAnyReceipt();
+  await loadAllData();
+  if(state.expensesLoaded) await loadExpenses(true);
+  if(state.view==="activitylog") loadActivityLog();
+  return true;
+}
+function closeAnyReceipt(){
+  try{ closeReceiptModal(); }catch(e){}
+}
+async function undoFromLog(id, confirmed){
+  if(!confirmed && !confirm("التراجع عن هذه العملية؟")) return;
+  await undoNow({id});
+}
+function renderUndoPanel(){
+  if(state.undoLogLoading && !state.undoLog) return `<div class="panel">${logoLoaderHtml("جارِ تحميل سجل التراجع...", 40)}</div>`;
+  const list = state.undoLog || [];
+  if(state.undoLogError) return `<div class="panel"><div class="empty">${escAttr(state.undoLogError)}</div></div>`;
+  const isAdmin = state.user && state.user.role==="admin";
+  return `<div class="panel">
+    <h3 style="margin:0 0 4px">↩ التراجع عن عملية</h3>
+    <div class="undo-hint">${isAdmin ? "آخر 50 عملية لكل المستخدمين." : "عملياتك أنت من اليوم فقط."} اضغط مطوّلًا على «تراجع». إذا عدّل أحد السطر بعدها يُرفض التراجع حتى لا يضيع تعديله.</div>
+    ${list.length===0 ? `<div class="empty">لا توجد عمليات يمكن التراجع عنها</div>` : `
+    <div class="undo-list">${list.map(e=>`<div class="undo-item${e.undone?' undo-done':''}">
+      <div class="undo-main"><div class="undo-label">${escAttr(e.label||e.action)}${e.group?` <span class="badge">مجموعة</span>`:""}</div>
+        <div class="undo-meta">${escAttr(e.user||"—")} · ${formatLogTime(e.createdAt)}</div></div>
+      <div>${e.undone ? `<span class="undo-meta">تم التراجع${e.undoneBy?" — "+escAttr(e.undoneBy):""}</span>` : holdBtn("↩ تراجع","undoFromLog",[e.id],{small:true})}</div>
+    </div>`).join("")}</div>`}
+  </div>`;
 }
 
 // ======================= OFFLINE CACHE + OUTBOX =======================
@@ -711,7 +1029,7 @@ async function trySyncOutbox(){
       const item = q.find(isMine);
       if(!item) break;
       markSending(item.qid, true);                      // the request below already carries the OLD data: an edit now must wait
-      const res = await api(item.action, item.payload);
+      const res = await api(item.action, item.payload, {quiet:true});
       if(res.networkError || res.authError){ markSending(item.qid, false); break; }
       removeFromOutbox(item.qid);                       // progress is saved after EVERY item
       if(res.ok || res.alreadyPaid){
@@ -750,6 +1068,7 @@ function describeOp(item){
     case "saveReminder": return `${p.kind==="reminder" ? "تذكير" : "وعد بالدفع"} — ${cust(p.id)}`;
     case "addExpense": return `حركة صندوق: ${p.category||""} ${fmtCurrency(p.amount, p.currency)} (${p.date||""})`;
     case "editExpense": return "تعديل حركة صندوق";
+    case "setReward": return `${p.kind==="revert" ? "إرجاع السرعة بعد المكافأة" : "مكافأة مضاعفة السرعة"} — ${cust(p.id)} (${monthLabelOf(p.month)})`;
     default: return item.action;
   }
 }
@@ -871,6 +1190,7 @@ async function loadAllData(silent, fresh){
   const res = await api("getAllData", fresh ? { fresh:true } : {});
   if(res.ok){
     state.serverVersion = res.version || "";
+    if(res.mt) state.mt = res.mt;
     const newCustomers = sanitizeCustomers(res.customers);
     const newPayments = res.payments || {};
     const prevPayments = Object.keys(state.payments || {}).length;
@@ -907,8 +1227,16 @@ function staleBannerHtml(){
   return `<div class="offline-banner no-print">⚠ البيانات المعروضة <b>نسخة محفوظة${state.dataLastOk ? " ("+agoText(state.dataLastOk)+")" : ""}</b> وليست محدّثة — ${escAttr(state.error || "تعذر الاتصال بالخادم")}. اضغط 🔄 تحديث للمحاولة.</div>`;
 }
 
+async function loadUndoLog(){
+  state.undoLogLoading = true;
+  const r = await api("getUndoLog", {limit:50});
+  state.undoLogLoading = false;
+  if(r.ok){ state.undoLog = r.entries || []; state.undoLogError = ""; }
+  else state.undoLogError = r.networkError ? "سجل التراجع يحتاج الإنترنت" : "سجل التراجع غير متاح — حدّث كود الخادم إلى 1.2";
+}
 async function loadActivityLog(){
   state.activityLogLoading = true; render();
+  loadUndoLog().then(render);
   try{
     const res = await api("getActivityLog", {limit:300});
     if(res.ok) state.activityLog = res.log;
@@ -932,10 +1260,12 @@ function getStatementRows(customer){
     else if(rec && rec.status==='not_subscribed') status = 'not_subscribed';
     else if(rec && rec.status==='unpaid') status = 'unpaid';
     else if(customer.joinMonth && m.key < customer.joinMonth) status = 'not_subscribed';
+    else if(isStoppedMonth(customer, m.key)) status = 'not_subscribed';
     else if(m.key > currentMonthKey) status = 'not_due_yet';
     else status = 'unpaid';
     return {
       key:m.key, label:m.label, abbr:m.abbr, year:m.year, due, status,
+      stopped: !rec && status==='not_subscribed' && isStoppedMonth(customer, m.key),
       paid: status==='paid',
       amount: rec?.amount||0, date: rec?.date||null, recordedBy: rec?.recordedBy||"",
       receivedBy: rec?.receivedBy==='firas' ? 'firas' : 'mohammed'
@@ -1127,7 +1457,7 @@ function renderLogin(){
   <div class="login-wrap">
     <div class="login-box">
       <div style="display:flex;justify-content:center;margin-bottom:12px">${logoSvg(76,"full")}</div>
-      <h1>شبكة الموسى</h1>
+      <h1>شبكة<span style="color:var(--accent)">الموسى</span></h1>
       <p>سجّل الدخول لمتابعة الزبائن والدفعات</p>
       <div style="font-size:11px;color:var(--muted);margin:-10px 0 14px">الإصدار ${APP_VERSION}</div>
       ${wasReset ? `<div style="background:var(--warn-dim);color:var(--warn);font-size:12.5px;padding:8px 10px;border-radius:7px;margin-bottom:12px">أُعيد ضبط الجلسة تلقائيًا بسبب خلل متكرر. سجّل الدخول من جديد.</div>` : ""}
@@ -1250,6 +1580,7 @@ function renderActivityLog(){
     <h1 class="page-title" style="margin-bottom:0">سجل النشاط</h1>
     <button class="btn secondary small" onclick="activityLogFetched=false; loadActivityLog()">تحديث</button>
   </div>
+  ${renderUndoPanel()}
   <div class="panel">
     ${state.activityLogLoading ? logoLoaderHtml("جارِ التحميل...", 52) :
       state.activityLog.length===0 ? `<div class="empty">لا يوجد نشاط مسجل بعد</div>` : `
@@ -1321,6 +1652,7 @@ function renderUsers(){
     </div>
     <button class="btn" onclick="submitNewUser()">إضافة المستخدم</button>
   </div>
+  ${renderMtSetupPanel()}
   <div class="panel">
     <h3>النسخ الاحتياطي</h3>
     <div style="font-size:13px;color:var(--muted);margin-bottom:8px">${state.lastBackup ? `آخر نسخة: ${state.lastBackup.slice(0,16).replace("T"," ")} — ${escAttr(state.lastBackupName||"")}` : "لا توجد نسخة بعد. شغّل الدالة setupAll من محرر Apps Script مرة واحدة."}</div>
@@ -1383,7 +1715,7 @@ function renderDashResults(){
   box.innerHTML = list.length ? list.map((c,i)=>{
     const t = customerTotals(c);
     return `<div class="item ${i===dashActive?'active':''}" onmousedown='event.preventDefault(); pickDashCustomer(${JSON.stringify(c.id)})'>
-      <div><div>${escAttr(c.name)}${c.active===false?' <span class="pill">معطّل</span>':''}</div><div class="sub">${escAttr(c.mikrotik||"—")}${c.phone?' · '+escAttr(c.phone):''}</div></div>
+      <div><div>${escAttr(c.name)}${c.active===false?' '+custPill(c):''}</div><div class="sub">${escAttr(c.mikrotik||"—")}${c.phone?' · '+escAttr(c.phone):''}</div></div>
       <div class="sub" style="color:${t.totalDebt>0?'var(--danger)':'var(--muted)'}">${t.totalDebt>0?fmtMoney(t.totalDebt):'لا دين'}</div>
     </div>`;
   }).join("") : `<div class="item"><span class="sub">لا يوجد مشترك مطابق</span></div>`;
@@ -1412,12 +1744,12 @@ function dashCardHtml(){
   const c = statsFor(base);
   const lastPaid = c.allRows.filter(r=>r.status==='paid').pop();
   const curRow = c.allRows.find(r=>r.key===currentMonthKey);
-  const curTxt = !curRow ? "—" : curRow.status==='paid' ? `مدفوع (${fmtMoney(curRow.amount)})` : curRow.status==='not_subscribed' ? "غير مشترك" : "لم يدفع";
+  const curTxt = !curRow ? "—" : curRow.status==='paid' ? `مدفوع (${fmtMoney(curRow.amount)})` : curRow.status==='not_subscribed' ? (curRow.stopped ? "موقوف" : "غير مشترك") : "لم يدفع";
   const follow = followUpHtmlRaw(base);
   const months = c.unpaidMonths.map(r=>r.label).join("، ");
   return `
   <div class="panel dash-card">
-    <div class="section-heading"><h3>${escAttr(c.name)}${c.active===false?' <span class="pill">معطّل</span>':''}</h3>
+    <div class="section-heading"><h3>${escAttr(c.name)}${c.active===false?' '+custPill(c):''}</h3>
       <button class="btn secondary small" onclick="closeDashCard()">✕ إغلاق</button></div>
     <div class="kv">
       <div><b>حساب المايكروتك</b>${escAttr(c.mikrotik||"—")}</div>
@@ -1458,15 +1790,17 @@ function renderDashboard(){
       oninput="onDashSearchInput(this.value)" onkeydown="onDashSearchKey(event)" onfocus="onDashSearchInput(this.value)" />
     <div id="dash-results"></div>
   </div>
-  ${monthLedgerHtml(d)}
   <div id="dash-card">${dashCardHtml()}</div>
+  ${reasonCheckList().length ? `<div class="offline-banner no-print" style="cursor:pointer" onclick="setView('customers')">⚠ ${reasonCheckList().length} زبون تعطّل في المايكروتك بدون دين — حدّد السبب (لعدم الدفع أم متوقف) من صفحة الزبائن ←</div>` : ""}
   <div class="stat-grid">
     <div class="stat-card"><div class="label">إجمالي الزبائن النشطين</div><div class="value">${enabledCustomers().length}</div>
-      <div class="sub">${d.newThisMonth>0?`+${d.newThisMonth} هذا الشهر`:"لا يوجد اشتراكات جديدة"}، ${disabledCount} معطّل</div></div>
+      <div class="sub">${d.newThisMonth>0?`+${d.newThisMonth} هذا الشهر`:"لا يوجد اشتراكات جديدة"} · ${disabledCount} معطّل</div></div>
     <div class="stat-card"><div class="label">المتوقع هذا الشهر</div><div class="value">${fmtMoney(d.totalExpected)}</div>
       <div class="sub">متوسط ${fmtMoney(d.avgRevenue)} لكل زبون</div></div>
-    <div class="stat-card accent"><div class="label">المحصّل هذا الشهر</div><div class="value">${fmtMoney(d.collectedThisMonth)}</div>
-      <div class="sub">باقي ${fmtMoney(Math.max(0, d.totalExpected - d.collectedThisMonth))}</div></div>
+    <div class="stat-card accent"><div class="label">المحصّل هذا الشهر</div><div class="value">${fmtMoney(d.collectedThisMonth)}</div></div>
+    <div class="stat-card accent"><div class="label">نسبة التحصيل</div><div class="value">${d.collectionRate}%</div>
+      <div class="sub">${d.paidCount} من ${d.activeCount} دفعوا</div></div>
+    <div class="stat-card danger"><div class="label">متأخرون هذا الشهر</div><div class="value">${d.lateNowList.length}</div></div>
     <div class="stat-card warn"><div class="label">إجمالي الديون المتراكمة</div><div class="value">${fmtMoney(d.totalOutstanding)}</div>
       <div class="sub">${d.debtorsList.length} زبون عليهم شهرين فأكثر</div></div>
     <div class="stat-card warn"><div class="label">متوسط مدة التأخر</div><div class="value">${d.avgOverdueMonths} شهر</div>
@@ -1502,40 +1836,24 @@ function renderDashboard(){
       <td class="follow-cell" data-follow="${c.id}" style="font-size:11.5px;line-height:1.7">${followUpHtml(c)}</td></tr>
     `).join("")}</tbody></table>`}
   </div>
+  ${renderSuspendedPanel()}
   `;
 }
-// this month at a glance: paid first, then promised, then owed; a click opens the subscriber's card
-function monthLedgerHtml(d){
-  const today = todayDateStr();
-  const order = { paid:0, promised:1, owed:2, notyet:3 };
-  const cells = enabledCustomers().map(c=>{
-    const row = getStatementRows(c).find(r=>r.key===currentMonthKey);
-    let kind = "owed";
-    if(!row || row.status==='not_subscribed') kind = "notyet";
-    else if(row.status==='paid') kind = "paid";
-    else if(c.promiseDate && c.promiseDate >= today) kind = "promised";
-    return { c, kind };
-  }).sort((a,b)=> order[a.kind]-order[b.kind] || (a.c.name||"").localeCompare(b.c.name||"", 'ar'));
-  const count = k => cells.filter(x=>x.kind===k).length;
-  const due = cells.length - count("notyet");
-  const words = { paid:"دفع", promised:"وعد بالدفع", owed:"لم يدفع", notyet:"لم يبدأ اشتراكه بعد" };
-  const monthName = months[months.length-1].label;
-  return `
-  <section class="ledger" aria-label="دفعات ${monthName}">
-    <h2 class="ledger-head"><b>${count("paid")}</b> من <b>${due}</b> مشتركًا دفعوا اشتراك ${monthName}
-      <small>نسبة التحصيل ${d.collectionRate}%. اضغط مربعًا لفتح بطاقة المشترك.</small></h2>
-    <div class="ledger-grid">
-      ${cells.map(({c,kind})=>`<button type="button" class="ledger-cell ${kind}${state.dashPick===c.id?' picked':''}" title="${escAttr(c.name)}: ${words[kind]}" aria-label="${escAttr(c.name)}: ${words[kind]}" onclick='pickDashCustomer(${JSON.stringify(c.id)}); document.getElementById("dash-card").scrollIntoView({block:"nearest"})'></button>`).join("")}
-    </div>
-    <div class="ledger-key">
-      <span class="legend-row"><span class="legend-dot" style="background:var(--accent)"></span>دفعوا <b>${count("paid")}</b></span>
-      <span class="legend-row"><span class="legend-dot" style="background:var(--warn)"></span>وعدوا بالدفع <b>${count("promised")}</b></span>
-      <span class="legend-row"><span class="legend-dot" style="background:var(--danger)"></span>لم يدفعوا <b>${count("owed")}</b></span>
-      ${count("notyet") ? `<span class="legend-row"><span class="legend-dot" style="box-shadow:inset 0 0 0 1.5px var(--border)"></span>يبدأ اشتراكهم لاحقًا <b>${count("notyet")}</b></span>` : ""}
-    </div>
-  </section>`;
+function renderSuspendedPanel(){
+  const list = suspendedDebtors();
+  const total = list.reduce((s,c)=>s+c.debtAmount,0);
+  return `<div class="panel">
+    <div class="section-heading"><h3>⛔ الموقوفون لعدم الدفع</h3><span style="display:flex;gap:8px;align-items:center"><span class="count-badge">${list.length} زبون</span>${total?`<span class="pill late">${fmtMoney(total)}</span>`:""}</span></div>
+    ${list.length===0 ? `<div class="empty">لا يوجد زبائن موقوفون لعدم الدفع</div>` : `
+    <div class="undo-hint">لا تُحتسب عليهم أشهر أثناء الإيقاف؛ الدين المعروض هو ما قبل الإيقاف. عند تفعيل الحساب في المايكروتك يعودون نشطين تلقائيًا.</div>
+    <table><thead><tr><th>الاسم</th><th>حساب المايكروتك</th><th>الهاتف</th><th>الدين</th><th>الإيقاف</th><th></th></tr></thead>
+    <tbody>${list.map(c=>`
+      <tr><td>${escAttr(c.name)}</td><td>${escAttr(c.mikrotik||"—")}</td><td>${escAttr(c.phone||"—")}</td>
+      <td>${c.debtAmount>0 ? `${fmtMoney(c.debtAmount)} <span class="pill warn">${c.unpaidCount} شهر</span>` : "لا دين"}</td>
+      <td style="font-size:11.5px">${stopSinceText(c)}<div class="follow-cell" data-follow="${c.id}">${followUpHtmlRaw(c)}</div></td>
+      <td class="action-cell">${c.debtAmount>0 ? `<button class="btn secondary small" onclick='sendReminder(${JSON.stringify(c.id)})'>💬 تذكير</button>` : ""}<button class="btn secondary small" onclick='openStatementFor(${JSON.stringify(c.id)})'>كشف</button></td></tr>`).join("")}</tbody></table>`}
+  </div>`;
 }
-
 // ======================= FOLLOW-UP (last reminder + promise to pay) =======================
 function daysSince(iso){
   if(!iso || isNaN(new Date(iso))) return null;
@@ -1655,7 +1973,7 @@ async function clearPromise(id){
   showToast("أُلغي الوعد");
 }
 
-const PIE_COLORS = ["#3cb984","#eab04d","#4d9ceb","#e2604f","#a68df0","#5fd4d4"];
+const PIE_COLORS = ["#38c98f","#eab04d","#4d9ceb","#e2604f","#a68df0","#5fd4d4"];
 
 function renderTrendBars(trend){
   const maxVal = Math.max(1, ...trend.map(t=>Math.max(t.expected, t.collected)));
@@ -1766,6 +2084,7 @@ function renderCustomers(){
     </div>
     <div id="customers-table-wrap">${renderCustomersTableOnly()}</div>
   </div>
+  ${renderMtPanel()}
   `;
 }
 
@@ -1799,7 +2118,7 @@ function renderCustomersTableOnly(){
           <div>${c.mikrotik||"—"}</div>
           <div style="color:var(--muted);font-size:11px;margin-top:4px;line-height:1.7">${metaLines.join("<br/>")}</div>
         </td>
-        <td>${isActive?'<span class="pill ok">نشط</span>':'<span class="pill">معطّل</span>'}</td>
+        <td>${custPill(c)}${!isActive ? `<div class="undo-meta">${stopSinceText(c)}</div><div class="mt-acts" style="margin-top:4px">${c.stopReason==='debt' ? `<button class="btn secondary small" onclick='setCustStatus(${JSON.stringify(c.id)},"left")'>🚪 متوقف</button>` : `<button class="btn secondary small" onclick='setCustStatus(${JSON.stringify(c.id)},"debt")'>⛔ لعدم الدفع</button>`}</div>` : ""}${rwOf(c).s.length ? `<div class="undo-meta">🎁 مضاعف: ${rwOf(c).s.slice(-3).map(rwMonthName).join("، ")}${rwStillDoubled(c) ? " — لم تُرجع سرعته" : ""}</div>` : ""}${c.mtProfile ? `<div class="undo-meta">المايكروتك: ${c.mtState==='off'?'معطّل':'فعّال'} · ${escAttr(c.mtProfile)}</div>` : ""}</td>
         <td class="action-cell">
           <button class="btn secondary small" onclick='openCustomerEditModal(${JSON.stringify(c.id)})'>تعديل</button>
           <button class="btn secondary small" onclick='doToggleActive(${JSON.stringify(c.id)})'>${isActive?"تعطيل":"تفعيل"}</button>
@@ -1934,6 +2253,7 @@ function renderPayments(){
   <div class="no-print" style="display:flex;justify-content:flex-end;margin:-4px 0 10px">
     <button class="btn secondary" onclick="exportPaymentsPdf()">📄 تصدير PDF</button>
   </div>
+  <div class="no-print">${renderRewardPanel()}</div>
   <div class="panel">
     <div style="color:var(--muted);font-size:12px;margin-bottom:10px">💬 تذكير واتساب و🤝 وعد بالدفع تحت دين كل مشترك. للتذكير السريع: فلتر «عليهم ديون فقط» وترتيب «الأكثر ديناً». اضغط أي خلية لتسجيل مبلغ، أو "لم يدفع"، أو "غير مشترك" عن ذلك الشهر. الاسم وحساب المايكروتك ثابتان عند التمرير أفقيًا، ورأس الجدول ثابت عند التمرير لأسفل.</div>
     <div id="payments-grid-wrap">${renderPaymentsGridOnly()}</div>
@@ -2478,7 +2798,7 @@ function renderStatementBody(customer){
     <div style="font-size:12.5px;color:var(--muted);margin-bottom:6px">أشهر ${state.viewYear}</div>
     <table><thead><tr><th>الشهر</th><th>المستحق</th><th>الحالة</th><th>تاريخ الدفع</th><th>سجّلها</th><th class="no-print"></th></tr></thead>
     <tbody>${rows.map(r=>`<tr><td>${r.label}</td><td>${fmtMoney(r.due)}</td>
-      <td>${statusPill(r.status)}</td>
+      <td>${r.stopped ? '<span class="pill">موقوف</span>' : statusPill(r.status)}</td>
       <td>${r.status==='paid'?isoToDateStr(r.date):"—"}</td>
       <td>${r.status==='paid'?((r.recordedBy||"—") + (r.receivedBy==='firas' ? ' · تحويل مباشر لفراس' : '')):"—"}</td>
       <td class="no-print action-cell"><button class="btn secondary small" onclick='openGridCellModal(${JSON.stringify(customer.id)},"${r.key}")'>تعديل</button>${r.status==='paid'?`<button class="btn secondary small" title="إيصال" onclick='receiptForRow(${JSON.stringify(customer.id)},"${r.key}")'>🧾</button>`:""}</td></tr>`).join("")}</tbody></table>
@@ -2499,7 +2819,7 @@ function renderStatement(){
     <label style="display:block;font-size:12.5px;color:var(--muted);margin-bottom:6px">اختر الزبون</label>
     <select onchange="state.statementCustomerId=this.value; render()" style="min-width:220px">
       ${state.customers.length===0?`<option value="">لا يوجد زبائن</option>`:
-        state.customers.map(c=>`<option value="${c.id}" ${c.id===state.statementCustomerId?'selected':''}>${c.name}${c.active===false?' (معطّل)':''}</option>`).join("")}
+        state.customers.map(c=>`<option value="${c.id}" ${c.id===state.statementCustomerId?'selected':''}>${c.name}${c.active===false?' ('+custStatusText(c)+')':''}</option>`).join("")}
     </select>
   </div>
   <div id="statement-body-wrap">${renderStatementBody(customer)}</div>
@@ -2559,9 +2879,10 @@ async function confirmPayAll(customerId, keys, _held){
   const receivedBy = document.getElementById("pa-receiver")?.value==='firas' ? 'firas' : 'mohammed';
   closePayAllModal();
   showToast(`جارِ تسجيل ${picks.length} شهر...`, 60000);
-  let saved = 0; const savedPicks = [];
+  let saved = 0; const savedPicks = []; const undoGroup = newUndoGroup(); let undoable = 0;
   for(const p of picks){
-    const res = await api("setPaymentStatus", {customerId, month:p.month, status:'paid', amount:p.amount, receivedBy, expectNew:true});
+    const res = await api("setPaymentStatus", {customerId, month:p.month, status:'paid', amount:p.amount, receivedBy, expectNew:true, undoGroup});
+    if(res.ok && res.undoId) undoable++;
     if(res.alreadyPaid) continue;   // someone recorded this month a moment ago: leave it untouched
     if(res.networkError){ queueOutbox("setPaymentStatus", {customerId, month:p.month, status:'paid', amount:p.amount, receivedBy, expectNew:true}); applyLocalPaymentUpdate(customerId, p.month, 'paid', p.amount, state.user.name, receivedBy); saved++; savedPicks.push(p); continue; }
     if(!res.ok){ hideToast(); alert("تعذر الحفظ: " + (res.error||"")); break; }
@@ -2571,6 +2892,7 @@ async function confirmPayAll(customerId, keys, _held){
   showToast(`سُجّل ${saved} شهر ✓`);
   await loadAllData();
   if(savedPicks.length) openReceiptModal(customerId, savedPicks, receivedBy, state.user.name);
+  if(undoable){ const cu = state.customers.find(c=>c.id===customerId); showUndoBar({group:undoGroup}, `دفع ${undoable} ${undoable===1?"شهر":"أشهر"} — ${cu?cu.name:""}`); }
 }
 function sendStatementWA(){
   const customer = state.customers.find(c=>c.id===state.statementCustomerId);
