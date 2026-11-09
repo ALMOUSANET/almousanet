@@ -421,11 +421,12 @@ function holdEnd(btn){
 
 // ======================= VERSION =======================
 // Raise this number together with SERVER_VERSION in Code.gs on every update.
-const APP_VERSION = "1.6";
-const APP_VERSION_DATE = "2026-11-06";
+const APP_VERSION = "1.7";
+const APP_VERSION_DATE = "2026-11-09";
 // the lowest Code.gs version this page works with (raise it only when the page needs something new from the server)
-const MIN_SERVER_VERSION = "1.4";
+const MIN_SERVER_VERSION = "1.5";
 const CHANGELOG = [
+  { v:"1.7", date:"2026-11-09", notes:"المكافأة تُطبَّق على الراوتر مباشرة: عند الإرسال تختار ⚡ مضاعفة السرعة (الافتراضي) أو 🌙 مفتوح ليلي، فيضع التطبيق الوسم #2X=آخر يوم في الشهر أو #VIP على حساب المشترك، والراوتر يطبّقه خلال 20 دقيقة كحد أقصى عبر سكربتاتك (X2_Apply والوضع الليلي)، وتنتهي المكافأة تلقائيًا بنهاية الشهر. حالة كل أمر ظاهرة: ⏳ بانتظار الراوتر ← ✓ طُبّقت أو ✗ فشلت مع السبب وزر إعادة المحاولة. أي مكافأة توضع يدويًا (البوت، شبكتي، وينبوكس) تُكتشف وتُسجَّل وتبقى رسالتها جاهزة مع تنبيه. السرعة الفعلية تظهر للاطلاع والسعر يبقى على السرعة المدفوعة. سكربت راوتر جديد (كل 20 دقيقة) وتنبيه بالبريد إذا توقفت المزامنة أكثر من ساعة. (يحتاج الخادم 1.5)" },
   { v:"1.6", date:"2026-11-06", notes:"مكافأة الملتزمين: قسم «🎁 مكافأة الملتزمين» في صفحة الدفعات يعرض الزبون النشط المسدِّد حتى الشهر الحالي (يُستثنى من اشترك هذا الشهر) مع رسالة واتساب جاهزة باسمه وسرعته المضاعفة حتى نهاية الشهر. يُسجَّل من أُرسلت له المكافأة؛ من سدّد الشهر التالي تظهر له ملاحظة «مضاعف من الشهر السابق» ويتفعّل زر «إعادة إرسال المكافأة» برسالة تمديد. قائمة «انتهت مضاعفتهم ولم يسددوا» لتذكيرك بإرجاع السرعة. (يحتاج الخادم 1.4)" },
   { v:"1.5", date:"2026-11-01", notes:"ربط المايكروتك: الراوتر يرسل حالة حسابات البرودباند كل 15 دقيقة. تعطيل حساب = «⛔ موقوف لعدم الدفع» إن كان عليه دين، وإلا «🚪 متوقف» مع سؤالك عن السبب. التفعيل يعيده نشطًا. الأشهر أثناء الإيقاف لا تُحتسب (شهر الإيقاف يبقى عليه). قائمة «الموقوفون لعدم الدفع» في الرئيسية، وقسم «مزامنة المايكروتك» في صفحة الزبائن (حالة مختلفة، سرعة مختلفة، حسابات غير متطابقة). السكربت من صفحة المستخدمين. (يحتاج الخادم 1.3)" },
   { v:"1.4", date:"2026-10-14", notes:"زر «↩ تراجع» يظهر 10 ثوانٍ بعد كل حفظ (دفعة، «دفع الكل» كعملية واحدة، تعديل/إضافة/تعطيل/حذف زبون، حركة صندوق، جرد، تذكير ووعد). وفي «سجل النشاط» قائمة بآخر العمليات للتراجع عنها بالضغط المطوّل: المدير عن أي عملية، والمحاسب عن عملياته هو ومن اليوم فقط. يُرفض التراجع إذا عدّل أحد السطر بعدها. + زر «🧾 إيصال لعدة أشهر» في كشف الحساب. (يحتاج الخادم 1.2)" },
@@ -716,7 +717,8 @@ function mtReport(){
     const off = a[1]===1;
     if(c.active!==false && off) mismatch.push({c, appTxt:"نشط", mtTxt:"معطّل", fix:"off"});
     if(c.active===false && !off) mismatch.push({c, appTxt:custStatusText(c), mtTxt:"فعّال", fix:"active"});
-    const sp = speedFromProfile(a[2]);
+    const base = String(a[2]||"").replace(/-2X$/,"");
+    const sp = (base==="night-open" || base==="EXPIRED") ? null : speedFromProfile(base);   // a reward or the night profile is not a paid upgrade
     if(sp!==null && Number(c.speed)!==sp) speedDiff.push({c, profile:a[2], sp});
   });
   const unknown = accounts.filter(a=>!used[mtNorm(a[0])]);
@@ -748,10 +750,11 @@ function renderMtPanel(){
   return `<div class="panel mt-panel">
     <div class="section-heading"><h3 style="margin:0">🔄 مزامنة المايكروتك</h3>
       <span class="undo-meta">${mt.enabled===false ? '<span class="pill">متوقفة</span> ' : ""}${escAttr(mtLastText(mt))} · ${R.accounts.length} حساب</span></div>
-    ${late ? `<div class="offline-banner" style="margin:8px 0">⚠ مرّت أكثر من ساعة بلا مزامنة — تأكد أن الراوتر متصل وأن سكربت NC_SyncSecrets يعمل.</div>` : ""}
+    ${late ? `<div class="offline-banner" style="margin:8px 0">⚠ مرّت أكثر من ساعة بلا مزامنة (المعتاد كل ${mtInterval()} دقيقة) — تأكد أن الراوتر متصل وأن سكربت NC_SyncSecrets يعمل. يصلك أيضًا تنبيه بالبريد.</div>` : ""}
     ${sec("⚠ تعطّلوا بدون دين — ما السبب؟", checks.length, checks.map(c=>row(escAttr(c.name), `${escAttr(c.mikrotik||"—")} · ${stopSinceText(c)} · اعتُبر «متوقف» مؤقتًا`, reasonButtons(c))).join(""), true)}
     ${sec("الحالة مختلفة بين التطبيق والمايكروتك", R.mismatch.length, R.mismatch.map(x=>row(escAttr(x.c.name), `التطبيق: ${x.appTxt} · المايكروتك: ${x.mtTxt}`, `<button class="btn secondary small" onclick='setCustStatus(${id(x.c)},"${x.fix}")'>طبّق حالة المايكروتك</button>`)).join(""), true)}
     ${sec("السرعة مختلفة", R.speedDiff.length, R.speedDiff.map(x=>row(escAttr(x.c.name), `المايكروتك: ${escAttr(x.profile)} · التطبيق: ${x.c.speed} ميغا`, `<button class="btn secondary small" onclick='adoptMtSpeed(${id(x.c)},${x.sp})'>اعتمد ${x.sp} ميغا</button>`)).join(""), false)}
+    ${sec("أوامر الراوتر (المكافآت)", mtCmds().filter(x=>x.status!=="cancelled").slice(0,20).length, mtCmds().filter(x=>x.status!=="cancelled").slice(0,20).map(x=>row(escAttr(((state.customers.find(c=>c.id===x.customerId)||{}).name) || x.account), `${escAttr(x.account)}${x.arg && x.arg!=="-" ? " · حتى "+escAttr(x.arg) : ""} · ${formatLogTime(x.createdAt)}${x.by ? " · "+escAttr(x.by) : ""}<br/>${cmdStatusHtml(x, x.status==="failed"||x.status==="expired")}`, "")).join(""), failedCmds().length>0)}
     ${sec("حسابات في المايكروتك غير موجودة في التطبيق", R.unknown.length, R.unknown.map(a=>row(escAttr(a[0]), `${a[1]===1?"معطّل":"فعّال"} · ${escAttr(a[2]||"")}`, "")).join(""), false)}
     ${sec("زبائن بلا حساب مطابق في المايكروتك", R.noAccount.length, R.noAccount.map(c=>row(escAttr(c.name), `حساب التطبيق: ${escAttr(c.mikrotik||"فارغ")} — صحّح الاسم ليطابق المايكروتك تمامًا`, `<button class="btn secondary small" onclick='openCustomerEditModal(${id(c)})'>تعديل</button>`)).join(""), false)}
     ${!checks.length && !R.mismatch.length && !R.speedDiff.length && !R.unknown.length && !R.noAccount.length ? `<div class="undo-hint" style="margin:8px 0 0">كل الحسابات متطابقة ✓</div>` : ""}
@@ -763,32 +766,175 @@ function mtScriptText(key){
   const url = APPS_SCRIPT_URL;
   return String.raw`/system scheduler remove [find name=NC_SyncSecrets]
 /system script remove [find name=NC_SyncSecrets]
-/system script add name=NC_SyncSecrets policy=read,write,policy,test dont-require-permissions=yes source={
+/system script add name=NC_SyncSecrets policy=read,write,policy,test,sensitive dont-require-permissions=yes source={
+# NC_SyncSecrets v2 - Al-Mousa accounting app. Every 20 min: takes the reward commands, applies them, sends the PPPoE accounts.
+# It only adds or removes the tags #2X=yyyy-MM-dd and #VIP in the account comment. X2_Apply and NIGHT_ON/NIGHT_OFF do the rest.
+:if ([:len [/system script job find where script="NC_SyncSecrets"]] > 1) do={ :error "NC_Sync busy" }
 :local url "${url}"
 :local key "${key}"
+:local delTag do={
+  :local s [:tostr $c]
+  :local p [:find $s $t]
+  :while ([:typeof $p] = "num") do={
+    :local e ($p + [:len $t])
+    :if ($t = "#2X" && [:pick $s $e] = "=") do={ :set e ($e + 11) }
+    :set s ([:pick $s 0 $p] . [:pick $s $e [:len $s]])
+    :set p [:find $s $t]
+  }
+  :local d [:find $s "  "]
+  :while ([:typeof $d] = "num") do={
+    :set s ([:pick $s 0 $d] . [:pick $s ($d + 1) [:len $s]])
+    :set d [:find $s "  "]
+  }
+  :while ([:len $s] > 0 && [:pick $s 0] = " ") do={ :set s [:pick $s 1 [:len $s]] }
+  :while ([:len $s] > 0 && [:pick $s ([:len $s] - 1)] = " ") do={ :set s [:pick $s 0 ([:len $s] - 1)] }
+  :return $s
+}
+:local boost ([:len [/system script find where name="BOOST_DATA"]] > 0)
+:local hasX2 ([:len [/system script find where name="X2_Apply"]] > 0)
+:local res ({})
+:local ver ({})
+:local vk ({})
+:local n 0
+:local reply ""
+:local reached false
+:do {
+  :local f [/tool fetch url=($url . "\?a=cmds&k=" . $key) output=user as-value]
+  :set reply ($f->"data")
+  :set reached true
+} on-error={ :log warning "NC_Sync: cannot reach the accounting app" }
+:if ($reached && [:pick $reply 0 2] != "OK") do={ :log warning ("NC_Sync: app answered " . [:pick $reply 0 40]) }
+:if ($reached && [:pick $reply 0 2] = "OK") do={
+  :local data [:pick $reply 3 [:len $reply]]
+  :while ([:len $data] > 0) do={
+    :local nl [:find $data "\n"]
+    :if ([:typeof $nl] != "num") do={ :set nl [:len $data] }
+    :local line [:pick $data 0 $nl]
+    :set data [:pick $data ($nl + 1) [:len $data]]
+    :if ([:len $line] > 0 && [:pick $line ([:len $line] - 1)] = "\r") do={ :set line [:pick $line 0 ([:len $line] - 1)] }
+    :local b1 [:find $line "|"]
+    :local b2
+    :local b3
+    :if ([:typeof $b1] = "num") do={ :set b2 [:find $line "|" ($b1 + 1)] }
+    :if ([:typeof $b2] = "num") do={ :set b3 [:find $line "|" ($b2 + 1)] }
+    :if ([:typeof $b3] = "num") do={
+      :local id [:pick $line 0 $b1]
+      :local act [:pick $line ($b1 + 1) $b2]
+      :local acc [:pick $line ($b2 + 1) $b3]
+      :local arg [:pick $line ($b3 + 1) [:len $line]]
+      :local code "ok"
+      :if (!($act = "2x" || $act = "2x-off" || $act = "vip" || $act = "vip-off")) do={ :set code "bad" }
+      :if ($act = "2x" && !($arg~"^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]\$")) do={ :set code "bad" }
+      :local sl [/ppp secret find where name=$acc]
+      :if ($code = "ok" && [:len $sl] = 0) do={ :set code "missing" }
+      :if ($code = "ok") do={
+        :local s ($sl->0)
+        :local cm [:tostr [/ppp secret get $s comment]]
+        :local pr [/ppp secret get $s profile]
+        :if ($act = "2x") do={
+          :if ([/ppp secret get $s disabled]) do={ :set code "disabled" }
+          :if ($code = "ok" && $pr = "EXPIRED") do={ :set code "expired" }
+          :if ($code = "ok" && !$hasX2) do={ :set code "nox2" }
+          :if ($code = "ok" && $boost && $pr != "night-open" && !($pr~"-2X\$") && [:len [/ppp profile find where name=($pr . "-2X")]] = 0) do={ :set code "boost" }
+          :if ($code = "ok") do={
+            :local nc [$delTag c=$cm t="#2X"]
+            :if ([:len $nc] > 0) do={ :set nc ($nc . " ") }
+            /ppp secret set $s comment=($nc . "#2X=" . $arg)
+            :set ($ver->$id) $acc
+            :set ($vk->$id) "on"
+          }
+        }
+        :if ($act = "2x-off") do={
+          :if ([:typeof [:find $cm "#2X"]] = "num") do={ /ppp secret set $s comment=[$delTag c=$cm t="#2X"] }
+          :if ($hasX2) do={
+            :set ($ver->$id) $acc
+            :set ($vk->$id) "off"
+          } else={ :if ($pr~"-2X\$") do={ :set code "nox2" } }
+        }
+        :if ($act = "vip") do={
+          :if (!($cm~"#[Vv][Ii][Pp]")) do={
+            :local nc $cm
+            :if ([:len $nc] > 0) do={ :set nc ($nc . " ") }
+            /ppp secret set $s comment=($nc . "#VIP")
+          }
+        }
+        :if ($act = "vip-off") do={
+          :local nc [$delTag c=$cm t="#VIP"]
+          :set nc [$delTag c=$nc t="#vip"]
+          :set nc [$delTag c=$nc t="#Vip"]
+          :if ($nc != $cm) do={ /ppp secret set $s comment=$nc }
+        }
+      }
+      :if ([:typeof ($ver->$id)] = "nothing") do={ :set ($res->$id) $code }
+      :set n ($n + 1)
+      :log info ("NC_Sync: " . $act . " " . $acc . " -> " . $code)
+    }
+  }
+}
+:if ([:len $ver] > 0) do={
+  :do { /system script run X2_Apply } on-error={ :log warning "NC_Sync: X2_Apply error" }
+  :foreach id,acc in=$ver do={
+    :local code "noapply"
+    :local sl [/ppp secret find where name=$acc]
+    :if ([:len $sl] = 0) do={ :set code "missing" } else={
+      :local pr [/ppp secret get ($sl->0) profile]
+      :if (($vk->$id) = "on") do={
+        :if ($pr~"-2X\$") do={ :set code "ok" }
+        :if ($pr = "night-open") do={ :set code "night" }
+      } else={
+        :if (!($pr~"-2X\$")) do={ :set code "ok" }
+      }
+    }
+    :set ($res->$id) $code
+    :log info ("NC_Sync: check " . $acc . " -> " . $code)
+  }
+}
 :local body ""
 :foreach s in=[/ppp secret find] do={
-  :local n [/ppp secret get $s name]
+  :local nm [/ppp secret get $s name]
   :local p [/ppp secret get $s profile]
-  :local np ($n . $p)
+  :local np ($nm . $p)
   :if (([:typeof [:find $np "\""]] = "nil") && ([:typeof [:find $np "\\"]] = "nil")) do={
     :local dv 0
     :if ([/ppp secret get $s disabled]) do={ :set dv 1 }
+    :local cm [:tostr [/ppp secret get $s comment]]
+    :local x2 ""
+    :local q [:find $cm "#2X"]
+    :if ([:typeof $q] = "num") do={
+      :set x2 "P"
+      :if ([:pick $cm ($q + 3)] = "=") do={
+        :local dt [:pick $cm ($q + 4) ($q + 14)]
+        :if ($dt~"^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]\$") do={ :set x2 $dt }
+      }
+    }
+    :local vp 0
+    :if ($cm~"#[Vv][Ii][Pp]") do={ :set vp 1 }
     :if ([:len $body] > 0) do={ :set body ($body . ",") }
-    :set body ($body . "[\"" . $n . "\"," . $dv . ",\"" . $p . "\"]")
+    :set body ($body . "[\"" . $nm . "\"," . $dv . ",\"" . $p . "\",\"" . $x2 . "\"," . $vp . "]")
   }
 }
-:set body ("{\"action\":\"mtSync\",\"payload\":{\"key\":\"" . $key . "\",\"s\":[" . $body . "]}}")
-:do { /tool fetch url=$url http-method=post http-header-field="Content-Type: text/plain" http-data=$body output=none } on-error={}
+:local rj ""
+:foreach id,cd in=$res do={
+  :if ([:len $rj] > 0) do={ :set rj ($rj . ",") }
+  :set rj ($rj . "[\"" . $id . "\",\"" . $cd . "\"]")
 }
-/system scheduler add name=NC_SyncSecrets interval=15m start-time=startup on-event="/system script run NC_SyncSecrets"
+:local bf 0
+:if ($boost) do={ :set bf 1 }
+:local nf 0
+:if ([:len [/system script find where name="VIP_DATA"]] > 0) do={ :set nf 1 }
+:set body ("{\"action\":\"mtSync\",\"payload\":{\"key\":\"" . $key . "\",\"v\":2,\"b\":" . $bf . ",\"n\":" . $nf . ",\"r\":[" . $rj . "],\"s\":[" . $body . "]}}")
+# Google answers a POST with a redirect that RouterOS shows as an error (405). The data has already arrived, so that error is ignored.
+:do { /tool fetch url=$url http-method=post http-header-field="Content-Type: text/plain" http-data=$body output=none } on-error={}
+:log info ("NC_Sync: done, commands=" . $n)
+}
+/system scheduler add name=NC_SyncSecrets interval=20m start-time=startup policy=read,write,policy,test,sensitive on-event="/system script run NC_SyncSecrets"
 /system script run NC_SyncSecrets`;
 }
 async function loadMtSetup(regen){
   state.mtSetupLoading = true; render();
   const r = await api("getMtSetup", regen ? {regen:true} : {});
   state.mtSetupLoading = false;
-  if(r.ok){ state.mtSetup = r; state.mt = r.info; } else alert(r.error || "تعذر التحميل — تأكد أن الخادم 1.3");
+  if(r.ok){ state.mtSetup = r; state.mt = r.info; } else alert(r.error || "تعذر التحميل — تأكد أن الخادم 1.5");
   render();
 }
 async function regenMtKey(confirmed){ if(!confirmed && !confirm("مفتاح جديد؟ السكربت القديم على الراوتر سيتوقف حتى تلصق الجديد.")) return; await loadMtSetup(true); }
@@ -807,26 +953,54 @@ function renderMtSetupPanel(){
   const s = state.mtSetup, mt = state.mt || {};
   return `<div class="panel">
     <h3>ربط المايكروتك</h3>
-    <div class="undo-hint">الراوتر يرسل حسابات البرودباند كل 15 دقيقة (قراءة فقط، لا يغيّر شيئًا على الراوتر). عند تعطيل حساب يصبح الزبون «موقوف لعدم الدفع» إن كان عليه دين، وإلا «متوقف» مع سؤالك. عند تفعيله يعود نشطًا. الأشهر أثناء الإيقاف لا تُحتسب.</div>
+    <div class="undo-hint">الراوتر يسأل التطبيق كل 20 دقيقة: يرسل حسابات البرودباند، ويطبّق أوامر المكافآت فقط (يضيف أو يزيل الوسم #2X=تاريخ أو #VIP في تعليق الحساب، وسكربتاتك X2_Apply والوضع الليلي تكمل). لا يعطّل ولا يحذف ولا يغيّر كلمات السر. عند تعطيل حساب يصبح الزبون «موقوف لعدم الدفع» إن كان عليه دين، وإلا «متوقف» مع سؤالك. عند تفعيله يعود نشطًا. الأشهر أثناء الإيقاف لا تُحتسب.</div>
     <div style="font-size:13px;margin-bottom:10px">${escAttr(mtLastText(mt))} · الحالة: ${mt.enabled===false ? '<span class="pill">متوقفة</span>' : '<span class="pill ok">تعمل</span>'}
       <button class="btn secondary small" onclick="toggleMtSync()">${mt.enabled===false ? "تشغيل المزامنة" : "إيقاف المزامنة"}</button></div>
     ${!s ? `<button class="btn secondary" onclick="loadMtSetup()">${state.mtSetupLoading ? "جارِ التحميل..." : "إظهار سكربت الراوتر"}</button>` : `
-      <div class="undo-hint">انسخه والصقه كما هو في Terminal في Winbox (New Terminal). يعمل فورًا مرة ثم كل 15 دقيقة. لتحديث التطبيق فور أمر من البوت أضف في سكربت البوت بعد التعطيل/التفعيل: <code>/system script run NC_SyncSecrets</code></div>
+      <div class="undo-hint">انسخه والصقه كما هو في Terminal في Winbox (New Terminal). يحلّ محل السكربت القديم بنفس الاسم، ويعمل فورًا مرة ثم كل 20 دقيقة. بعدها راجع Log في Winbox: يجب أن ترى <code>NC_Sync: done</code>. لتحديث التطبيق فور أمر من البوت أضف في سكربت البوت: <code>/system script run NC_SyncSecrets</code></div>
       <textarea id="mt-script" readonly dir="ltr" style="width:100%;height:220px;font-family:monospace;font-size:11px">${escAttr(mtScriptText(s.key))}</textarea>
       <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"><button class="btn" onclick="copyMtScript()">📋 نسخ السكربت</button>${holdBtn("مفتاح جديد","regenMtKey",[],{small:true})}</div>`}
   </div>`;
 }
 
 
-// ======================= REWARD: مكافأة مضاعفة السرعة للملتزمين =======================
-function rwOf(c){ const r = (c && c.rewards) || {}; return { s: Array.isArray(r.s)?r.s:[], x: Array.isArray(r.x)?r.x:[] }; }
+// ======================= REWARD: مكافأة الملتزمين (⚡ مضاعفة السرعة أو 🌙 مفتوح ليلي) =======================
+// The app adds / removes only the tags in the PPPoE account comment (#2X=yyyy-MM-dd, #VIP).
+// The router's own scripts apply them: X2_Apply (every minute) and NIGHT_ON / NIGHT_OFF (00:00 / 07:00).
+// The price never changes: it follows the paid speed registered in the app.
+const NIGHT_SPEED = 30;                 // rate-limit of the night-open profile (30M/30M)
+const NIGHT_HOURS = "من 12 ليلًا حتى 7 صباحًا";
+const RW_TYPES = { "2x":"⚡ مضاعفة السرعة", night:"🌙 مفتوح ليلي" };
+function rwOf(c){
+  const r = (c && c.rewards) || {}, s = Array.isArray(r.s)?r.s:[];
+  return { s, x: Array.isArray(r.x)?r.x:[], w: Array.isArray(r.w)?r.w:s.slice(),
+    k: (r.k && typeof r.k==="object" && !Array.isArray(r.k)) ? r.k : {}, m: Array.isArray(r.m)?r.m:[], a: Array.isArray(r.a)?r.a:[] };
+}
 function rwMonthName(key){ return ARABIC_MONTHS[Number(String(key).slice(5,7))-1] || key; }
 function rwPrev(){ return addMonths(currentMonthKey, -1); }
 function rwLastSent(c){ const s = rwOf(c).s.filter(m=>m<=currentMonthKey); return s.length ? s[s.length-1] : ""; }
-// the speed is still doubled from an earlier month and nobody confirmed it was set back
+function rwKind(c, m){ return rwOf(c).k[m] || "2x"; }
+function mtInterval(){ return (state.mt && state.mt.interval) || 20; }
+function mtTagsKnown(){ return !!(state.mt && state.mt.tags); }
+function mtAccOf(c){
+  const accs = (state.mt && Array.isArray(state.mt.accounts)) ? state.mt.accounts : [];
+  if(!c || !c.mikrotik) return null;
+  return accs.find(a=>mtNorm(a[0])===mtNorm(c.mikrotik)) || null;
+}
+// what the router really has right now (null = the router script is too old to say)
+function rwOnRouter(c){
+  const a = mtAccOf(c);
+  if(!a || a.length<5) return null;
+  return { x2: !!a[3] || /-2X$/.test(a[2]||""), x2date: (a[3] && a[3]!=="P") ? a[3] : "", perm: a[3]==="P", vip: a[4]===1, profile: a[2]||"" };
+}
+function rwCanApply(c){ return !!(state.mt && state.mt.configured && mtAccOf(c)); }
+// a reward from an earlier month is still on
 function rwStillDoubled(c){
   const last = rwLastSent(c), r = rwOf(c);
-  return !!last && last < currentMonthKey && !r.x.some(m=>m>last);
+  if(!last || last >= currentMonthKey) return false;
+  const on = mtTagsKnown() ? rwOnRouter(c) : null;
+  if(on) return on.x2 || on.vip;
+  return !r.x.some(m=>m>last);
 }
 function rwEligible(c){
   if(c.active===false) return false;
@@ -836,83 +1010,196 @@ function rwEligible(c){
   const rec = state.payments[`${c.id}:${currentMonthKey}`];
   return !!(rec && rec.status==='paid');
 }
+function rwManualPending(c){ const r = rwOf(c); return r.m.includes(currentMonthKey) && r.s.includes(currentMonthKey) && !r.w.includes(currentMonthKey); }
 function rewardLists(){
-  const eligible = [], revert = [];
+  const eligible = [], revert = [], manual = [];
   state.customers.forEach(c=>{
+    if(rwManualPending(c)) manual.push(c);
     if(rwEligible(c)) eligible.push(c);
-    else if(rwStillDoubled(c)) revert.push(c);
+    else if(!rwOf(c).s.includes(currentMonthKey) && rwStillDoubled(c)) revert.push(c);
   });
   const byName = (a,b)=>String(a.name).localeCompare(String(b.name), "ar");
-  return { eligible: eligible.sort(byName), revert: revert.sort(byName) };
+  return { eligible: eligible.sort(byName), revert: revert.sort(byName), manual: manual.sort(byName) };
 }
-function rwIsContinuing(c){ return rwLastSent(c)===rwPrev() && rwStillDoubled(c); }
+function rwIsContinuing(c, type){
+  const last = rwLastSent(c);
+  return last===rwPrev() && rwStillDoubled(c) && (!type || rwKind(c, last)===type);
+}
 function rwSpeedText(c){ const s = Number(c.speed)||0; return { from:s, to:s*2 }; }
-function buildRewardMessage(c){
+function buildRewardMessage(c, type, willApply){
+  type = type || "2x";
   const sp = rwSpeedText(c), name = rwMonthName(currentMonthKey);
-  if(rwIsContinuing(c)){
-    return `مرحبًا ${c.name} 🌟
-لالتزامك المستمر بالتسديد، تم تمديد مضاعفة سرعة اشتراكك (${sp.to} ميغا) حتى نهاية شهر ${name}.
+  const when = willApply ? `\n⏱ تُفعَّل خلال ${mtInterval()} دقيقة كحد أقصى.` : "";
+  const cont = rwIsContinuing(c, type);
+  if(type==="night"){
+    if(cont) return `مرحبًا ${c.name} 🌟
+لالتزامك المستمر بالتسديد، تم تمديد الاشتراك المفتوح ليلًا (${NIGHT_HOURS} بسرعة تصل إلى ${NIGHT_SPEED} ميغا) حتى نهاية شهر ${name}.
 شكرًا لثقتك بشبكة الموسى للإنترنت 🙏`;
+    return `مرحبًا ${c.name} 🌟
+شكرًا لالتزامك بتسديد اشتراكك أول بأول. تقديرًا لذلك أصبح اشتراكك مفتوحًا ليلًا ${NIGHT_HOURS} بسرعة تصل إلى ${NIGHT_SPEED} ميغا، حتى نهاية شهر ${name}.${willApply ? "\n🌙 يبدأ من الليلة الساعة 12." : ""}
+شبكة الموسى للإنترنت 🙏`;
   }
+  if(cont) return `مرحبًا ${c.name} 🌟
+لالتزامك المستمر بالتسديد، تم تمديد مضاعفة سرعة اشتراكك (${sp.to} ميغا) حتى نهاية شهر ${name}.${when}
+شكرًا لثقتك بشبكة الموسى للإنترنت 🙏`;
   return `مرحبًا ${c.name} 🌟
-شكرًا لالتزامك بتسديد اشتراكك أول بأول. تقديرًا لذلك تمت مضاعفة سرعة اشتراكك من ${sp.from} إلى ${sp.to} ميغا حتى نهاية شهر ${name}.
+شكرًا لالتزامك بتسديد اشتراكك أول بأول. تقديرًا لذلك تمت مضاعفة سرعة اشتراكك من ${sp.from} إلى ${sp.to} ميغا حتى نهاية شهر ${name}.${when}
 شبكة الموسى للإنترنت 🙏`;
 }
 function rwNoteText(c){
   const last = rwLastSent(c), r = rwOf(c);
   if(!last || last >= currentMonthKey) return "";
-  if(r.x.some(m=>m>last)) return `سبق أن ضوعفت سرعته (${rwMonthName(last)}) وأُعيدت`;
-  if(last===rwPrev()) return `🔁 سرعته مضاعفة من الشهر السابق (${rwMonthName(last)})`;
-  return `⚠ مضاعف منذ ${monthLabelOf(last)} ولم تؤكد إرجاع سرعته`;
+  const kind = rwKind(c, last)==="night" ? "مفتوح ليلي" : "مضاعف";
+  if(!rwStillDoubled(c)) return `سبق أن كوفئ (${kind} — ${rwMonthName(last)}) وانتهت`;
+  if(last===rwPrev()) return `🔁 ${kind} من الشهر السابق (${rwMonthName(last)})`;
+  return `⚠ ${kind} منذ ${monthLabelOf(last)} وما زال على الراوتر`;
 }
-async function recordReward(id, kind){
+
+// ---- router commands (shown as ⏳ / ✓ / ✗) ----
+const CMD_NAMES = { "2x":"⚡ مضاعفة", "2x-off":"إرجاع السرعة", vip:"🌙 مفتوح ليلي", "vip-off":"إزالة المفتوح الليلي" };
+const CMD_RESULTS = {
+  missing:"الحساب غير موجود على الراوتر", disabled:"الحساب معطّل على الراوتر", expired:"الحساب على بروفايل EXPIRED",
+  noapply:"وُضع الوسم لكن البروفايل لم يتغير — تأكد أن السكربت X2_Apply يعمل وأن للبروفايل الأصلي rate-limit",
+  nox2:"السكربت X2_Apply غير موجود على الراوتر", bad:"أمر غير صالح", boost:"بانتظار انتهاء BOOST (مضاعفة الجميع)", undo:"أُلغي بالتراجع"
+};
+function mtCmds(){ return (state.mt && Array.isArray(state.mt.cmds)) ? state.mt.cmds : []; }
+function rwCmdOf(c){ return mtCmds().find(x=>x.customerId===c.id && x.status!=="cancelled") || null; }
+function cmdStatusHtml(x, withRetry){
+  if(!x) return "";
+  const nm = CMD_NAMES[x.action] || x.action;
+  const retry = withRetry ? ` <button class="btn secondary small" onclick='retryRouterCmd(${JSON.stringify(x.id)})'>↻ أعد المحاولة</button>` : "";
+  if(x.status==="pending") return `<span class="pill">⏳ ${nm}: بانتظار الراوتر${x.result==="boost" ? " — "+CMD_RESULTS.boost : ` (خلال ${mtInterval()} دقيقة كحد أقصى)`}</span>`;
+  if(x.status==="sent") return `<span class="pill">⏳ ${nm}: وصل للراوتر، بانتظار النتيجة</span>`;
+  if(x.status==="done"){
+    if(x.result==="night") return `<span class="pill ok">✓ ${nm}: وُضع الوسم — يُطبَّق بعد 7 صباحًا (الحساب على المفتوح الليلي الآن)</span>`;
+    if(x.action==="vip") return `<span class="pill ok">✓ ${nm}: جاهز، يبدأ الساعة 12 ليلًا</span>`;
+    return `<span class="pill ok">✓ ${nm}: طُبّقت على الراوتر</span>`;
+  }
+  if(x.status==="expired") return `<span class="pill late">✗ ${nm}: انتهت المهلة (لم يتصل الراوتر 24 ساعة)</span>${retry}`;
+  if(x.status==="failed") return `<span class="pill late">✗ ${nm}: فشلت — ${escAttr(CMD_RESULTS[x.result] || x.result || "سبب غير معروف")}</span>${retry}`;
+  return "";
+}
+function failedCmds(){
+  const seen = {}, out = [];
+  mtCmds().forEach(x=>{ const k = x.customerId || x.account; if(seen[k]) return; seen[k] = true; if(x.status==="failed" || x.status==="expired") out.push(x); });
+  return out;
+}
+async function retryRouterCmd(cmdId){
+  const r = await api("retryRouterCmd", {cmdId});
+  if(!r.ok){ alert(r.error || "تعذر"); return; }
+  showToast(r.cmd && r.cmd.already ? "مطبّق على الراوتر أصلًا ✓" : `أُعيد الإرسال — خلال ${mtInterval()} دقيقة كحد أقصى`);
+  await loadAllData(true);
+}
+
+async function recordReward(id, kind, type){
   const month = currentMonthKey;
   const c0 = state.customers.find(x=>x.id===id); if(!c0) return;
-  const r = rwOf(c0), list = kind==="sent" ? r.s : r.x;
-  if(list.includes(month)) return;
-  const next = { s:[...r.s], x:[...r.x] };
-  (kind==="sent" ? next.s : next.x).push(month);
+  const r = rwOf(c0), next = { s:[...r.s], x:[...r.x], w:[...r.w], k:{...r.k}, m:[...r.m], a:[...r.a] };
+  if(kind==="sent"){ if(!next.s.includes(month)) next.s.push(month); if(!next.w.includes(month)) next.w.push(month); next.k[month] = type||"2x"; }
+  else if(kind==="msg"){ if(!next.w.includes(month)) next.w.push(month); }
+  else if(!next.x.includes(month)) next.x.push(month);
   patchCustomerLocal(id, { rewards: next });
   render();
   const payload = {id, month, kind};
+  if(type) payload.type = type;
   const res = await api("setReward", payload);
   if(res.networkError){ queueOutbox("setReward", payload); showToast("لا يوجد اتصال — سيُسجَّل عند عودة الإنترنت"); return; }
-  if(!res.ok){ showToast(res.error || "تعذر تسجيل المكافأة"); await loadAllData(true); }
+  if(!res.ok){ showToast(res.error || "تعذر تسجيل المكافأة"); await loadAllData(true); return; }
+  if(res.cmd && res.cmd.queued) showToast(`أُرسل الأمر للراوتر — يُطبَّق خلال ${mtInterval()} دقيقة كحد أقصى`, 3500);
+  else if(res.cmd && res.cmd.already) showToast("مطبّقة على الراوتر أصلًا ✓");
+  await loadAllData(true);
 }
+function closeRewardModal(){ const el = document.getElementById("reward-overlay"); if(el) el.remove(); }
 function sendReward(id){
-  const base = state.customers.find(x=>x.id===id);
-  if(!base) return;
-  if(!rwEligible(base)){ alert(`${base.name} لم يعد مستوفيًا لشرط المكافأة (يجب أن يكون نشطًا ومسدّدًا حتى الشهر الحالي).`); render(); return; }
-  if(!String(base.phone||"").replace(/\D/g,"")){ openCustomerEditModal(id, { askPhone:true }); return; }
-  window.open(waLink(base.phone, buildRewardMessage(base)), "_blank");
-  recordReward(id, "sent");
+  const c = state.customers.find(x=>x.id===id);
+  if(!c) return;
+  if(!rwEligible(c)){ alert(`${c.name} لم يعد مستوفيًا لشرط المكافأة (يجب أن يكون نشطًا ومسدّدًا حتى الشهر الحالي).`); render(); return; }
+  if(!String(c.phone||"").replace(/\D/g,"")){ openCustomerEditModal(id, { askPhone:true }); return; }
+  closeRewardModal();
+  const sp = rwSpeedText(c), apply = rwCanApply(c), last = rwLastSent(c);
+  const cur = rwOf(c).s.includes(currentMonthKey) ? rwKind(c, currentMonthKey) : (last===rwPrev() && rwStillDoubled(c) ? rwKind(c, last) : "2x");
+  const on = rwOnRouter(c);
+  const nowTxt = on ? (on.x2 ? `حاليًا على الراوتر: ⚡ مضاعف${on.x2date ? " حتى "+on.x2date : on.perm ? " (دائم)" : ""}` : on.vip ? "حاليًا على الراوتر: 🌙 مفتوح ليلي" : "حاليًا على الراوتر: سرعته العادية") : "";
+  const btn = (type, label, sub) => `<button class="btn ${type===cur ? "" : "secondary"}" style="display:block;width:100%;text-align:start;margin-bottom:8px;padding:12px" onclick='sendRewardType(${JSON.stringify(id)},"${type}")'>
+      <b>${label}</b>${type===cur ? ' <span class="pill ok" style="margin-inline-start:6px">الافتراضي</span>' : ""}<div style="font-size:12px;font-weight:400;opacity:.85;margin-top:3px">${sub}</div></button>`;
+  const ov = document.createElement("div");
+  ov.className = "modal-overlay"; ov.id = "reward-overlay";
+  ov.onclick = e => { if(e.target===ov) closeRewardModal(); };
+  ov.innerHTML = `<div class="modal-box" style="max-width:420px">
+    <h3>🎁 مكافأة ${escAttr(c.name)}</h3>
+    <div style="font-size:13px;margin:-6px 0 12px;line-height:1.8">سرعته المسجلة <b>${sp.from} ميغا</b>${c.mikrotik ? ` · ${escAttr(c.mikrotik)}` : ""}${nowTxt ? `<br/><span class="undo-meta">${nowTxt}</span>` : ""}<br/>ماذا تريد؟</div>
+    ${btn("2x", `⚡ مضاعفة السرعة: ${sp.from} ← ${sp.to} ميغا`, `حتى نهاية ${rwMonthName(currentMonthKey)}، وتنتهي تلقائيًا`)}
+    ${btn("night", `🌙 مفتوح ليلي حتى ${NIGHT_SPEED} ميغا`, `${NIGHT_HOURS} حتى نهاية ${rwMonthName(currentMonthKey)}`)}
+    <div class="undo-hint" style="margin:6px 0 0">${apply ? `يُطبَّق على الراوتر تلقائيًا خلال ${mtInterval()} دقيقة كحد أقصى. السعر لا يتغير.` : `⚠ لا يوجد حساب مطابق في المايكروتك${state.mt && state.mt.configured ? "" : " (المزامنة غير مفعّلة)"} — تُرسل الرسالة فقط، وطبّق السرعة يدويًا.`}</div>
+    <div class="modal-actions"><button class="btn secondary" onclick="closeRewardModal()">إلغاء</button></div>
+  </div>`;
+  document.body.appendChild(ov);
 }
+function sendRewardType(id, type){
+  closeRewardModal();
+  const c = state.customers.find(x=>x.id===id); if(!c) return;
+  window.open(waLink(c.phone, buildRewardMessage(c, type, rwCanApply(c))), "_blank");
+  recordReward(id, "sent", type);
+}
+// reward found on the router (put by hand): message only, nothing to apply
+function sendRewardMsg(id){
+  const c = state.customers.find(x=>x.id===id); if(!c) return;
+  if(!String(c.phone||"").replace(/\D/g,"")){ openCustomerEditModal(id, { askPhone:true }); return; }
+  window.open(waLink(c.phone, buildRewardMessage(c, rwKind(c, currentMonthKey), false)), "_blank");
+  recordReward(id, "msg");
+}
+function ackManualReward(id){ recordReward(id, "msg"); }
 function confirmRevertSpeed(id){ recordReward(id, "revert"); }
+function rwTypeBadge(c, m){ return rwKind(c, m)==="night" ? "🌙 مفتوح ليلي" : "⚡ مضاعفة"; }
 function renderRewardPanel(){
-  const { eligible, revert } = rewardLists();
-  const pending = eligible.filter(c=>!rwOf(c).s.includes(currentMonthKey)).length;
+  const { eligible, revert, manual } = rewardLists();
+  const pending = eligible.filter(c=>!rwOf(c).w.includes(currentMonthKey)).length;
   const id = c => JSON.stringify(c.id);
+  const mt = state.mt || {};
   const row = (main, sub, acts) => `<div class="undo-item"><div class="undo-main"><div class="undo-label">${main}</div>${sub?`<div class="undo-meta">${sub}</div>`:""}</div><div class="mt-acts">${acts||""}</div></div>`;
+  const cmdLine = c => { const x = rwCmdOf(c); return x && x.month===currentMonthKey || (x && (x.status==="pending"||x.status==="sent")) ? "<br/>"+cmdStatusHtml(x, true) : ""; };
   const elRows = eligible.map(c=>{
-    const sp = rwSpeedText(c), sent = rwOf(c).s.includes(currentMonthKey), note = rwNoteText(c);
-    const acts = sent
-      ? `<span class="pill ok">أُرسلت ✓</span><button class="btn secondary small" onclick='sendReward(${id(c)})'>↻ إعادة إرسال</button>`
-      : `<button class="btn small" onclick='sendReward(${id(c)})'>🎁 ${rwIsContinuing(c) ? "إعادة إرسال المكافأة" : "إرسال المكافأة"}</button>`;
-    return row(escAttr(c.name), `${sp.from} ← ${sp.to} ميغا${c.mikrotik ? " · "+escAttr(c.mikrotik) : ""}${note ? "<br/>"+note : ""}`, acts);
+    const sp = rwSpeedText(c), r = rwOf(c), rewarded = r.s.includes(currentMonthKey), msged = r.w.includes(currentMonthKey), note = rwNoteText(c);
+    let acts;
+    if(rewarded && msged) acts = `<span class="pill ok">أُرسلت ✓ ${rwTypeBadge(c, currentMonthKey)}</span><button class="btn secondary small" onclick='sendReward(${id(c)})'>↻ إعادة إرسال</button>`;
+    else if(rewarded) acts = `<span class="pill">🔔 فُعّلت يدويًا</span><button class="btn small" onclick='sendRewardMsg(${id(c)})'>📩 إرسال الرسالة</button>`;
+    else acts = `<button class="btn small" onclick='sendReward(${id(c)})'>🎁 ${rwIsContinuing(c) ? "إعادة إرسال المكافأة" : "إرسال المكافأة"}</button>`;
+    return row(escAttr(c.name), `${sp.from} ميغا (⚡ ${sp.to} أو 🌙 ليلي)${c.mikrotik ? " · "+escAttr(c.mikrotik) : " · بلا حساب مايكروتك"}${note ? "<br/>"+note : ""}${cmdLine(c)}`, acts);
   }).join("");
+  const mnRows = manual.map(c=>row(escAttr(c.name), `تغيّرت سرعته فعليًا يدويًا (البوت / شبكتي / وينبوكس): ${rwTypeBadge(c, currentMonthKey)}${c.mikrotik ? " · "+escAttr(c.mikrotik) : ""}${rwEligible(c) ? "" : " · ⚠ ليس مسدّدًا حتى "+rwMonthName(currentMonthKey)}`,
+    `<button class="btn small" onclick='sendRewardMsg(${id(c)})'>📩 إرسال الرسالة</button><button class="btn secondary small" onclick='ackManualReward(${id(c)})'>تم، بلا رسالة</button>`)).join("");
   const rvRows = revert.map(c=>{
-    const last = rwLastSent(c);
+    const last = rwLastSent(c), on = mtTagsKnown() ? rwOnRouter(c) : null, x = rwCmdOf(c);
     const why = c.active===false ? "غير نشط" : `لم يسدد ${rwMonthName(currentMonthKey)} بعد`;
-    return row(escAttr(c.name), `مضاعف في ${rwMonthName(last)} · ${why}${c.mikrotik ? " · "+escAttr(c.mikrotik) : ""}`, `<button class="btn secondary small" onclick='confirmRevertSpeed(${id(c)})'>✓ أرجعت السرعة</button>`);
+    const busy = x && (x.status==="pending" || x.status==="sent") && /off$/.test(x.action);
+    const acts = busy ? "" : on
+      ? `<button class="btn secondary small" onclick='confirmRevertSpeed(${id(c)})'>↩ أنهِ المكافأة الآن</button>`
+      : `<button class="btn secondary small" onclick='confirmRevertSpeed(${id(c)})'>✓ أرجعت السرعة</button>`;
+    return row(escAttr(c.name), `${rwTypeBadge(c, last)} في ${rwMonthName(last)}${on && on.perm ? " (وسم دائم بلا تاريخ)" : ""} · ${why}${c.mikrotik ? " · "+escAttr(c.mikrotik) : ""}${x ? "<br/>"+cmdStatusHtml(x, true) : ""}`, acts);
   }).join("");
-  return `<details class="panel mt-sec" ${pending||revert.length ? "open":""}>
-    <summary style="font-size:15px">🎁 مكافأة الملتزمين — مضاعفة السرعة <span class="count-badge">${eligible.length}</span>${revert.length?` <span class="pill late">${revert.length} لإرجاع سرعتهم</span>`:""}</summary>
-    <div class="undo-hint" style="margin-top:6px">يظهر هنا الزبون النشط الذي سدّد كل أشهره حتى ${rwMonthName(currentMonthKey)} ضمنًا (يُستثنى من اشترك هذا الشهر). التطبيق يرسل الرسالة ويسجّل من ضوعفت سرعته فقط؛ المضاعفة نفسها تضعها من البوت. من سدّد الشهر التالي تفعّل له «إعادة إرسال المكافأة» وتظهر ملاحظة أنه مضاعف من الشهر السابق.</div>
+  const sync = mt.configured || mt.last
+    ? `<div class="undo-meta" style="margin-top:4px">🔄 ${escAttr(mtLastText(mt))} · الراوتر يسأل كل ${mtInterval()} دقيقة${mt.boost ? " · 🚀 BOOST مفعّل للجميع الآن" : ""}${mt.night ? " · 🌙 الوضع الليلي يعمل الآن" : ""}</div>${mt.last && !mt.tags ? `<div class="offline-banner" style="margin:8px 0">⚠ سكربت الراوتر قديم: لن تُطبَّق المكافآت تلقائيًا. حدّثه من صفحة «المستخدمون» ← «ربط المايكروتك».</div>` : ""}`
+    : `<div class="undo-meta" style="margin-top:4px">المزامنة مع الراوتر غير مفعّلة: تُرسل الرسالة فقط.</div>`;
+  return `<details class="panel mt-sec" ${pending||revert.length||manual.length ? "open":""}>
+    <summary style="font-size:15px">🎁 مكافأة الملتزمين <span class="count-badge">${eligible.length}</span>${manual.length?` <span class="pill">🔔 ${manual.length} يدويًا</span>`:""}${revert.length?` <span class="pill late">${revert.length} انتهت مكافأتهم</span>`:""}</summary>
+    <div class="undo-hint" style="margin-top:6px">يظهر هنا الزبون النشط الذي سدّد كل أشهره حتى ${rwMonthName(currentMonthKey)} ضمنًا (يُستثنى من اشترك هذا الشهر). عند الإرسال تختار: ⚡ مضاعفة السرعة (الافتراضي) أو 🌙 مفتوح ليلي. التطبيق يضع الوسم على حسابه في المايكروتك والراوتر يطبّقه خلال ${mtInterval()} دقيقة كحد أقصى، وتنتهي المكافأة تلقائيًا بنهاية الشهر. السعر لا يتغير: يبقى على السرعة المدفوعة.</div>
+    ${sync}
+    ${manual.length ? `<h3 style="margin:14px 0 4px;font-size:14px">🔔 تغيّرت سرعتهم يدويًا — الرسالة جاهزة</h3><div class="undo-list">${mnRows}</div>` : ""}
     ${eligible.length ? `<div class="undo-list">${elRows}</div>` : `<div class="empty">لا يوجد زبائن مستوفون للشرط حاليًا</div>`}
-    ${revert.length ? `<h3 style="margin:14px 0 4px;font-size:14px">⏳ انتهت مضاعفتهم ولم يسددوا</h3>
-      <div class="undo-hint">أرجع سرعتهم إلى الطبيعية من البوت ثم اضغط «أرجعت السرعة»، وإن سدّدوا لاحقًا يعودون إلى القائمة أعلاه.</div>
+    ${revert.length ? `<h3 style="margin:14px 0 4px;font-size:14px">⏳ انتهت مكافأتهم ولم يسددوا</h3>
+      <div class="undo-hint">${mtTagsKnown() ? "ما زالت المكافأة على حساباتهم في الراوتر. «أنهِ المكافأة الآن» يرسل أمر الإزالة للراوتر." : "أرجع سرعتهم من البوت ثم اضغط «أرجعت السرعة»."} وإن سدّدوا لاحقًا يعودون إلى القائمة أعلاه.</div>
       <div class="undo-list">${rvRows}</div>` : ""}
   </details>`;
+}
+// effective speed on the router, for information only (the price follows the paid speed)
+function effectiveSpeedHtml(c){
+  const on = rwOnRouter(c), a = mtAccOf(c);
+  if(!a) return "";
+  const parts = [];
+  if(on && on.x2 || /-2X$/.test(a[2]||"")) parts.push(`⚡ فعليًا ${rwSpeedText(c).to} ميغا${on && on.x2date ? " حتى "+on.x2date : on && on.perm ? " (دائم)" : ""}`);
+  if(on && on.vip) parts.push("🌙 مفتوح ليلي");
+  if(state.mt && state.mt.boost) parts.push("🚀 BOOST");
+  return parts.length ? `<div class="undo-meta">${parts.join(" · ")} — للاطلاع، السعر على ${c.speed} ميغا</div>` : "";
 }
 
 // ======================= UNDO (تراجع) =======================
@@ -1068,7 +1355,7 @@ function describeOp(item){
     case "saveReminder": return `${p.kind==="reminder" ? "تذكير" : "وعد بالدفع"} — ${cust(p.id)}`;
     case "addExpense": return `حركة صندوق: ${p.category||""} ${fmtCurrency(p.amount, p.currency)} (${p.date||""})`;
     case "editExpense": return "تعديل حركة صندوق";
-    case "setReward": return `${p.kind==="revert" ? "إرجاع السرعة بعد المكافأة" : "مكافأة مضاعفة السرعة"} — ${cust(p.id)} (${monthLabelOf(p.month)})`;
+    case "setReward": return `${p.kind==="revert" ? "إنهاء المكافأة" : p.kind==="msg" ? "رسالة المكافأة" : (p.type==="night" ? "مكافأة مفتوح ليلي" : "مكافأة مضاعفة السرعة")} — ${cust(p.id)} (${monthLabelOf(p.month)})`;
     default: return item.action;
   }
 }
@@ -1791,6 +2078,7 @@ function renderDashboard(){
     <div id="dash-results"></div>
   </div>
   <div id="dash-card">${dashCardHtml()}</div>
+  ${dashRouterHtml()}
   ${reasonCheckList().length ? `<div class="offline-banner no-print" style="cursor:pointer" onclick="setView('customers')">⚠ ${reasonCheckList().length} زبون تعطّل في المايكروتك بدون دين — حدّد السبب (لعدم الدفع أم متوقف) من صفحة الزبائن ←</div>` : ""}
   <div class="stat-grid">
     <div class="stat-card"><div class="label">إجمالي الزبائن النشطين</div><div class="value">${enabledCustomers().length}</div>
@@ -1838,6 +2126,17 @@ function renderDashboard(){
   </div>
   ${renderSuspendedPanel()}
   `;
+}
+function dashRouterHtml(){
+  const mt = state.mt || {};
+  if(!mt.configured && !mt.last) return "";
+  const late = mt.last && (Date.now() - new Date(mt.last).getTime()) > 60*60000;
+  const manual = state.customers.filter(rwManualPending), failed = failedCmds();
+  const waiting = mtCmds().filter(x=>x.status==="pending"||x.status==="sent").length;
+  return `<div class="undo-meta no-print" style="margin:-6px 0 10px">🔄 الراوتر: ${escAttr(mtLastText(mt))} · كل ${mtInterval()} دقيقة${waiting ? ` · ⏳ ${waiting} أمر بانتظار الراوتر` : ""}${mt.boost ? " · 🚀 BOOST مفعّل" : ""}</div>
+  ${late ? `<div class="offline-banner no-print" style="cursor:pointer" onclick="setView('customers')">⚠ لم تصل مزامنة من الراوتر منذ أكثر من ساعة — أوامر المكافآت متوقفة حتى يعود.</div>` : ""}
+  ${manual.length ? `<div class="offline-banner no-print" style="cursor:pointer" onclick="setView('payments')">🔔 تغيّرت سرعة ${manual.slice(0,3).map(c=>escAttr(c.name)).join("، ")}${manual.length>3 ? ` و${manual.length-3} غيرهم` : ""} فعليًا يدويًا — سُجّلت مكافأة والرسالة جاهزة في صفحة الدفعات ←</div>` : ""}
+  ${failed.length ? `<div class="offline-banner no-print" style="cursor:pointer" onclick="setView('payments')">✗ ${failed.length} أمر مكافأة فشل على الراوتر — التفاصيل وإعادة المحاولة في صفحة الدفعات ←</div>` : ""}`;
 }
 function renderSuspendedPanel(){
   const list = suspendedDebtors();
@@ -2118,7 +2417,7 @@ function renderCustomersTableOnly(){
           <div>${c.mikrotik||"—"}</div>
           <div style="color:var(--muted);font-size:11px;margin-top:4px;line-height:1.7">${metaLines.join("<br/>")}</div>
         </td>
-        <td>${custPill(c)}${!isActive ? `<div class="undo-meta">${stopSinceText(c)}</div><div class="mt-acts" style="margin-top:4px">${c.stopReason==='debt' ? `<button class="btn secondary small" onclick='setCustStatus(${JSON.stringify(c.id)},"left")'>🚪 متوقف</button>` : `<button class="btn secondary small" onclick='setCustStatus(${JSON.stringify(c.id)},"debt")'>⛔ لعدم الدفع</button>`}</div>` : ""}${rwOf(c).s.length ? `<div class="undo-meta">🎁 مضاعف: ${rwOf(c).s.slice(-3).map(rwMonthName).join("، ")}${rwStillDoubled(c) ? " — لم تُرجع سرعته" : ""}</div>` : ""}${c.mtProfile ? `<div class="undo-meta">المايكروتك: ${c.mtState==='off'?'معطّل':'فعّال'} · ${escAttr(c.mtProfile)}</div>` : ""}</td>
+        <td>${custPill(c)}${!isActive ? `<div class="undo-meta">${stopSinceText(c)}</div><div class="mt-acts" style="margin-top:4px">${c.stopReason==='debt' ? `<button class="btn secondary small" onclick='setCustStatus(${JSON.stringify(c.id)},"left")'>🚪 متوقف</button>` : `<button class="btn secondary small" onclick='setCustStatus(${JSON.stringify(c.id)},"debt")'>⛔ لعدم الدفع</button>`}</div>` : ""}${rwOf(c).s.length ? `<div class="undo-meta">🎁 مكافأة: ${rwOf(c).s.slice(-3).map(m=>rwMonthName(m)+(rwKind(c,m)==="night"?" 🌙":" ⚡")).join("، ")}${rwStillDoubled(c) ? " — ما زالت مفعّلة" : ""}</div>` : ""}${c.mtProfile ? `<div class="undo-meta">المايكروتك: ${c.mtState==='off'?'معطّل':'فعّال'} · ${escAttr(c.mtProfile)}</div>` : ""}${effectiveSpeedHtml(c)}</td>
         <td class="action-cell">
           <button class="btn secondary small" onclick='openCustomerEditModal(${JSON.stringify(c.id)})'>تعديل</button>
           <button class="btn secondary small" onclick='doToggleActive(${JSON.stringify(c.id)})'>${isActive?"تعطيل":"تفعيل"}</button>
