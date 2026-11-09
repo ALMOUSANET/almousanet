@@ -305,6 +305,8 @@ input, select { background:var(--panel-2); border:1px solid var(--border); color
 .undo-bar ~ .isp-toast { bottom:76px; }
 .isp-toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--panel-2); border:1px solid var(--border); color:var(--text); padding:10px 18px; border-radius:8px; font-size:13px; z-index:2000; box-shadow:0 4px 14px rgba(0,0,0,0.35); max-width:90vw; text-align:center; }
 .offline-banner { background:var(--warn-dim); color:var(--warn); font-size:12.5px; padding:6px 16px; text-align:center; }
+.rcv-pick { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:4px; }
+.rcv-pick .btn { padding:12px 8px; font-size:14px; }
 .main .offline-banner { border-radius:8px; margin:0 0 12px; padding:8px 14px; line-height:1.7; }
 .install-icon-row { display:flex; align-items:center; gap:12px; margin-bottom:14px; }
 .install-icon-row img { width:48px; height:48px; border-radius:12px; }
@@ -449,11 +451,12 @@ function holdEnd(btn){
 
 // ======================= VERSION =======================
 // Raise this number together with SERVER_VERSION in Code.gs on every update.
-const APP_VERSION = "1.7.1";
+const APP_VERSION = "1.8";
 const APP_VERSION_DATE = "2026-11-09";
 // the lowest Code.gs version this page works with (raise it only when the page needs something new from the server)
-const MIN_SERVER_VERSION = "1.5";
+const MIN_SERVER_VERSION = "1.6";
 const CHANGELOG = [
+  { v:"1.8", date:"2026-11-09", notes:"إشعارات مجموعة المالية على التلغرام: كل دفعة (و«دفع كل المتأخر» رسالة واحدة) وتعديلها وإلغاؤها، حركات الصندوقين، الجرد والتسوية، التراجع، وتنبيه إذا لم تصل هدية للراوتر خلال ساعة، وإحصائية أسبوعية (المسددون، غير المسددين، المحصّل، المكافأون، المتأخرون). الإعداد في صفحة المستخدمين. سكربت راوتر v3: يرسل إلى مجموعة البوت رسالة تفعيل الهدية بعد أن يتحقق أنها طُبّقت فعلًا، أو سبب الفشل، ويتابع الهدايا المؤجلة حتى تُطبَّق. عند تسجيل دفعة جديدة يجب اختيار «💵 نقدًا — محمد» أو «📲 شام كاش — فراس» (لا يوجد اختيار افتراضي)، وعلامة 📲 بجانب دفعات شام كاش. تعديل المستلم لدفعة قديمة يحافظ على تاريخها. زر في الأعلى (على أندرويد) لاختيار واتساب العادي أو بزنس لكل جهاز. (يحتاج الخادم 1.6)" },
   { v:"1.7.1", date:"2026-11-09", notes:"إعادة تحسين الواجهة الذي ضاع مع تحديثات 1.5–1.7: ألوان من أخضر الشعار (أخضر مدفوع، أصفر وعد، أحمر دين)، خط Readex Pro للعناوين والأرقام، شبكة مربعات دفعات الشهر في أعلى الرئيسية (مربع لكل مشترك يفتح بطاقته)، بطاقات الأرقام في شريط واحد، وقائمة الجوال سطر واحد يُمرَّر. (الصفحة فقط، الخادم يبقى 1.5)" },
   { v:"1.7", date:"2026-11-09", notes:"المكافأة تُطبَّق على الراوتر مباشرة: عند الإرسال تختار ⚡ مضاعفة السرعة (الافتراضي) أو 🌙 مفتوح ليلي، فيضع التطبيق الوسم #2X=آخر يوم في الشهر أو #VIP على حساب المشترك، والراوتر يطبّقه خلال 20 دقيقة كحد أقصى عبر سكربتاتك (X2_Apply والوضع الليلي)، وتنتهي المكافأة تلقائيًا بنهاية الشهر. حالة كل أمر ظاهرة: ⏳ بانتظار الراوتر ← ✓ طُبّقت أو ✗ فشلت مع السبب وزر إعادة المحاولة. أي مكافأة توضع يدويًا (البوت، شبكتي، وينبوكس) تُكتشف وتُسجَّل وتبقى رسالتها جاهزة مع تنبيه. السرعة الفعلية تظهر للاطلاع والسعر يبقى على السرعة المدفوعة. سكربت راوتر جديد (كل 20 دقيقة) وتنبيه بالبريد إذا توقفت المزامنة أكثر من ساعة. (يحتاج الخادم 1.5)" },
   { v:"1.6", date:"2026-11-06", notes:"مكافأة الملتزمين: قسم «🎁 مكافأة الملتزمين» في صفحة الدفعات يعرض الزبون النشط المسدِّد حتى الشهر الحالي (يُستثنى من اشترك هذا الشهر) مع رسالة واتساب جاهزة باسمه وسرعته المضاعفة حتى نهاية الشهر. يُسجَّل من أُرسلت له المكافأة؛ من سدّد الشهر التالي تظهر له ملاحظة «مضاعف من الشهر السابق» ويتفعّل زر «إعادة إرسال المكافأة» برسالة تمديد. قائمة «انتهت مضاعفتهم ولم يسددوا» لتذكيرك بإرجاع السرعة. (يحتاج الخادم 1.4)" },
@@ -791,16 +794,37 @@ function renderMtPanel(){
 }
 
 // ---- admin: router script ----
+// RouterOS string literal: every byte outside plain ASCII (Arabic, emoji, quotes, $, ?) becomes \XX
+function rosStr(s){
+  let out = '"';
+  for(const b of new TextEncoder().encode(String(s))){
+    if(b<0x20 || b>0x7e || b===0x22 || b===0x5c || b===0x24 || b===0x3f) out += "\\" + b.toString(16).toUpperCase().padStart(2,"0");
+    else out += String.fromCharCode(b);
+  }
+  return out + '"';
+}
 function mtScriptText(key){
-  const url = APPS_SCRIPT_URL;
+  const url = APPS_SCRIPT_URL, R = rosStr;
   return String.raw`/system scheduler remove [find name=NC_SyncSecrets]
 /system script remove [find name=NC_SyncSecrets]
 /system script add name=NC_SyncSecrets policy=read,write,policy,test,sensitive dont-require-permissions=yes source={
-# NC_SyncSecrets v2 - Al-Mousa accounting app. Every 20 min: takes the reward commands, applies them, sends the PPPoE accounts.
+# NC_SyncSecrets v3 - Al-Mousa accounting app. Every 20 min: takes the reward commands, applies them, checks they really applied,
+# reports to the Telegram group (through the bot's own tgLog) and sends the PPPoE accounts back.
 # It only adds or removes the tags #2X=yyyy-MM-dd and #VIP in the account comment. X2_Apply and NIGHT_ON/NIGHT_OFF do the rest.
 :if ([:len [/system script job find where script="NC_SyncSecrets"]] > 1) do={ :error "NC_Sync busy" }
 :local url "${url}"
 :local key "${key}"
+:global tgLog
+:if ([:typeof $tgLog] = "nothing" && [:len [/system script find where name="TGBOT_Lib"]] > 0) do={ :do { /system script run TGBOT_Lib } on-error={} }
+:global ncRwWait
+:if ([:typeof $ncRwWait] != "array") do={ :set ncRwWait ({}) }
+:global ncRwSaid
+:if ([:typeof $ncRwSaid] != "array") do={ :set ncRwSaid ({}) }
+:local say do={
+  :global tgLog
+  :log info ("NC_Sync: " . $1)
+  :if ([:typeof $tgLog] != "nothing") do={ :do { $tgLog $1 a=1 } on-error={ :log warning "NC_Sync: telegram failed" } }
+}
 :local delTag do={
   :local s [:tostr $c]
   :local p [:find $s $t]
@@ -819,16 +843,20 @@ function mtScriptText(key){
   :while ([:len $s] > 0 && [:pick $s ([:len $s] - 1)] = " ") do={ :set s [:pick $s 0 ([:len $s] - 1)] }
   :return $s
 }
+:local why ({missing=${R("الحساب غير موجود على الراوتر")}; disabled=${R("الحساب معطّل على الراوتر")}; expired=${R("الحساب على بروفايل EXPIRED")}; nox2=${R("السكربت X2_Apply غير موجود")}; bad=${R("أمر غير صالح")}; noapply=${R("وُضع الوسم لكن البروفايل لم يتغير، تحقق من X2_Apply ومن rate-limit البروفايل الأصلي")}})
 :local boost ([:len [/system script find where name="BOOST_DATA"]] > 0)
 :local hasX2 ([:len [/system script find where name="X2_Apply"]] > 0)
 :local res ({})
 :local ver ({})
 :local vk ({})
+:local vnm ({})
+:local vold ({})
+:local varg ({})
 :local n 0
 :local reply ""
 :local reached false
 :do {
-  :local f [/tool fetch url=($url . "\?a=cmds&k=" . $key) output=user as-value]
+  :local f [/tool fetch url=($url . "\?a=cmds&v=3&k=" . $key) output=user as-value]
   :set reply ($f->"data")
   :set reached true
 } on-error={ :log warning "NC_Sync: cannot reach the accounting app" }
@@ -844,13 +872,20 @@ function mtScriptText(key){
     :local b1 [:find $line "|"]
     :local b2
     :local b3
+    :local b4
     :if ([:typeof $b1] = "num") do={ :set b2 [:find $line "|" ($b1 + 1)] }
     :if ([:typeof $b2] = "num") do={ :set b3 [:find $line "|" ($b2 + 1)] }
+    :if ([:typeof $b3] = "num") do={ :set b4 [:find $line "|" ($b3 + 1)] }
     :if ([:typeof $b3] = "num") do={
       :local id [:pick $line 0 $b1]
       :local act [:pick $line ($b1 + 1) $b2]
       :local acc [:pick $line ($b2 + 1) $b3]
-      :local arg [:pick $line ($b3 + 1) [:len $line]]
+      :local arg ""
+      :local nm $acc
+      :if ([:typeof $b4] = "num") do={
+        :set arg [:pick $line ($b3 + 1) $b4]
+        :set nm [:pick $line ($b4 + 1) [:len $line]]
+      } else={ :set arg [:pick $line ($b3 + 1) [:len $line]] }
       :local code "ok"
       :if (!($act = "2x" || $act = "2x-off" || $act = "vip" || $act = "vip-off")) do={ :set code "bad" }
       :if ($act = "2x" && !($arg~"^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]\$")) do={ :set code "bad" }
@@ -871,6 +906,9 @@ function mtScriptText(key){
             /ppp secret set $s comment=($nc . "#2X=" . $arg)
             :set ($ver->$id) $acc
             :set ($vk->$id) "on"
+            :set ($vnm->$id) $nm
+            :set ($vold->$id) $pr
+            :set ($varg->$id) $arg
           }
         }
         :if ($act = "2x-off") do={
@@ -878,6 +916,7 @@ function mtScriptText(key){
           :if ($hasX2) do={
             :set ($ver->$id) $acc
             :set ($vk->$id) "off"
+            :set ($vnm->$id) $nm
           } else={ :if ($pr~"-2X\$") do={ :set code "nox2" } }
         }
         :if ($act = "vip") do={
@@ -886,13 +925,28 @@ function mtScriptText(key){
             :if ([:len $nc] > 0) do={ :set nc ($nc . " ") }
             /ppp secret set $s comment=($nc . "#VIP")
           }
+          :if ([:len [/system script find where name="VIP_DATA"]] > 0) do={
+            $say (${R("🌙 هدية ")} . $nm . " (" . $acc . ")" . ${R(": أُضيف للمفتوح الليلي، يبدأ من الليلة القادمة الساعة 12")})
+          } else={
+            $say (${R("🌙 هدية ")} . $nm . " (" . $acc . ")" . ${R(": أُضيف للمفتوح الليلي، يبدأ الليلة الساعة 12")})
+          }
         }
         :if ($act = "vip-off") do={
           :local nc [$delTag c=$cm t="#VIP"]
           :set nc [$delTag c=$nc t="#vip"]
           :set nc [$delTag c=$nc t="#Vip"]
           :if ($nc != $cm) do={ /ppp secret set $s comment=$nc }
+          $say (${R("↩ انتهت هدية ")} . $nm . " (" . $acc . ")" . ${R(": أُزيل من المفتوح الليلي")})
         }
+      }
+      :if ($code = "boost") do={
+        :if (($ncRwSaid->$acc) != "1") do={
+          $say (${R("⏳ هدية ")} . $nm . " (" . $acc . ")" . ${R(" مؤجلة: BOOST يعمل الآن، تُفعَّل المضاعفة بعد إيقافه")})
+          :set ($ncRwSaid->$acc) "1"
+        }
+      }
+      :if ($code != "ok" && $code != "boost") do={
+        $say (${R("✗ لم يُنفَّذ أمر الهدية لـ")} . $nm . " (" . $acc . "): " . ($why->$code))
       }
       :if ([:typeof ($ver->$id)] = "nothing") do={ :set ($res->$id) $code }
       :set n ($n + 1)
@@ -902,22 +956,70 @@ function mtScriptText(key){
 }
 :if ([:len $ver] > 0) do={
   :do { /system script run X2_Apply } on-error={ :log warning "NC_Sync: X2_Apply error" }
+  :delay 10s
   :foreach id,acc in=$ver do={
     :local code "noapply"
+    :local nm ($vnm->$id)
     :local sl [/ppp secret find where name=$acc]
     :if ([:len $sl] = 0) do={ :set code "missing" } else={
       :local pr [/ppp secret get ($sl->0) profile]
+      :local online ([:len [/ppp active find where name=$acc]] > 0)
+      :local st ${R("غير متصل لحظة الفحص، تُطبَّق عند اتصاله")}
+      :if ($online) do={ :set st ${R("متصل الآن بالسرعة الجديدة")} }
       :if (($vk->$id) = "on") do={
-        :if ($pr~"-2X\$") do={ :set code "ok" }
-        :if ($pr = "night-open") do={ :set code "night" }
+        :if ($pr~"-2X\$") do={
+          :set code "ok"
+          :if (($vold->$id)~"-2X\$") do={
+            $say (${R("🎁 مُدّدت هدية ")} . $nm . " (" . $acc . ")" . ${R(": ⚡ مضاعفة السرعة حتى ")} . ($varg->$id))
+          } else={
+            $say (${R("🎁 فُعّلت هدية ")} . $nm . " (" . $acc . ")" . ${R(": ⚡ مضاعفة السرعة\n")} . ($vold->$id) . ${R(" ← ")} . $pr . ${R("\nحتى ")} . ($varg->$id) . "\n" . $st)
+          }
+          :set ($ncRwSaid->$acc) "0"
+        }
+        :if ($pr = "night-open") do={
+          :set code "night"
+          $say (${R("⏳ هدية ")} . $nm . " (" . $acc . ")" . ${R(" مؤجلة: الحساب على المفتوح الليلي الآن، تُفعَّل المضاعفة بعد 7 صباحًا وسأخبرك")})
+          :set ($ncRwWait->$acc) ({$id; 0; $nm; ($varg->$id)})
+        }
       } else={
-        :if (!($pr~"-2X\$")) do={ :set code "ok" }
+        :if (!($pr~"-2X\$")) do={
+          :set code "ok"
+          $say (${R("↩ انتهت هدية ")} . $nm . " (" . $acc . ")" . ${R(": رجع إلى ")} . $pr)
+        }
       }
     }
+    :if ($code = "missing" || $code = "noapply") do={ $say (${R("✗ لم يُنفَّذ أمر الهدية لـ")} . $nm . " (" . $acc . "): " . ($why->$code)) }
     :set ($res->$id) $code
     :log info ("NC_Sync: check " . $acc . " -> " . $code)
   }
 }
+# rewards deferred by the night profile: confirm them once they really apply (give up after 24 hours = 72 runs)
+:local keep ({})
+:foreach wa,wv in=$ncRwWait do={
+  :local wid ($wv->0)
+  :local wr [:tonum ($wv->1)]
+  :local wn ($wv->2)
+  :local wd ($wv->3)
+  :local sl [/ppp secret find where name=$wa]
+  :if ([:len $sl] > 0 && [:typeof ($res->$wid)] = "nothing") do={
+    :local pr [/ppp secret get ($sl->0) profile]
+    :local cm [:tostr [/ppp secret get ($sl->0) comment]]
+    :if ($pr~"-2X\$") do={
+      $say (${R("🎁 فُعّلت هدية ")} . $wn . " (" . $wa . ")" . ${R(": ⚡ مضاعفة السرعة بعد انتهاء الوضع الليلي\nالبروفايل الآن ")} . $pr . ${R(" حتى ")} . $wd)
+      :set ($res->$wid) "ok"
+    } else={
+      :if ([:typeof [:find $cm "#2X"]] = "num") do={
+        :if ($wr < 72) do={
+          :set ($keep->$wa) ({$wid; ($wr + 1); $wn; $wd})
+        } else={
+          $say (${R("✗ لم تُفعَّل هدية ")} . $wn . " (" . $wa . ")" . ${R(" خلال 24 ساعة: البروفايل ما زال ")} . $pr)
+          :set ($res->$wid) "noapply"
+        }
+      }
+    }
+  }
+}
+:set ncRwWait $keep
 :local body ""
 :foreach s in=[/ppp secret find] do={
   :local nm [/ppp secret get $s name]
@@ -963,7 +1065,7 @@ async function loadMtSetup(regen){
   state.mtSetupLoading = true; render();
   const r = await api("getMtSetup", regen ? {regen:true} : {});
   state.mtSetupLoading = false;
-  if(r.ok){ state.mtSetup = r; state.mt = r.info; } else alert(r.error || "تعذر التحميل — تأكد أن الخادم 1.5");
+  if(r.ok){ state.mtSetup = r; state.mt = r.info; } else alert(r.error || "تعذر التحميل — تأكد أن الخادم 1.6");
   render();
 }
 async function regenMtKey(confirmed){ if(!confirmed && !confirm("مفتاح جديد؟ السكربت القديم على الراوتر سيتوقف حتى تلصق الجديد.")) return; await loadMtSetup(true); }
@@ -982,7 +1084,7 @@ function renderMtSetupPanel(){
   const s = state.mtSetup, mt = state.mt || {};
   return `<div class="panel">
     <h3>ربط المايكروتك</h3>
-    <div class="undo-hint">الراوتر يسأل التطبيق كل 20 دقيقة: يرسل حسابات البرودباند، ويطبّق أوامر المكافآت فقط (يضيف أو يزيل الوسم #2X=تاريخ أو #VIP في تعليق الحساب، وسكربتاتك X2_Apply والوضع الليلي تكمل). لا يعطّل ولا يحذف ولا يغيّر كلمات السر. عند تعطيل حساب يصبح الزبون «موقوف لعدم الدفع» إن كان عليه دين، وإلا «متوقف» مع سؤالك. عند تفعيله يعود نشطًا. الأشهر أثناء الإيقاف لا تُحتسب.</div>
+    <div class="undo-hint">الراوتر يسأل التطبيق كل 20 دقيقة: يرسل حسابات البرودباند، ويطبّق أوامر المكافآت فقط (يضيف أو يزيل الوسم #2X=تاريخ أو #VIP في تعليق الحساب، وسكربتاتك X2_Apply والوضع الليلي تكمل). لا يعطّل ولا يحذف ولا يغيّر كلمات السر. ويرسل إلى مجموعة بوت الراوتر رسالة تفعيل كل هدية بعد أن يتحقق أنها طُبّقت فعلًا، أو سبب عدم تفعيلها. عند تعطيل حساب يصبح الزبون «موقوف لعدم الدفع» إن كان عليه دين، وإلا «متوقف» مع سؤالك. عند تفعيله يعود نشطًا. الأشهر أثناء الإيقاف لا تُحتسب.</div>
     <div style="font-size:13px;margin-bottom:10px">${escAttr(mtLastText(mt))} · الحالة: ${mt.enabled===false ? '<span class="pill">متوقفة</span>' : '<span class="pill ok">تعمل</span>'}
       <button class="btn secondary small" onclick="toggleMtSync()">${mt.enabled===false ? "تشغيل المزامنة" : "إيقاف المزامنة"}</button></div>
     ${!s ? `<button class="btn secondary" onclick="loadMtSetup()">${state.mtSetupLoading ? "جارِ التحميل..." : "إظهار سكربت الراوتر"}</button>` : `
@@ -992,6 +1094,101 @@ function renderMtSetupPanel(){
   </div>`;
 }
 
+
+// ======================= TELEGRAM: مجموعة المالية (admin) =======================
+const TG_FLAG_NAMES = { pay:"💵 الدفعات (تسجيل، تعديل، إلغاء)", box:"📥 حركات الصندوقين (محمد وفراس)", count:"🧮 الجرد والتسوية", alert:"⚠ تنبيهات: هدية لم تصل للراوتر، توقف المزامنة", weekly:"📊 الإحصائية الأسبوعية" };
+const TG_DAY_NAMES = { SATURDAY:"السبت", SUNDAY:"الأحد", MONDAY:"الاثنين", TUESDAY:"الثلاثاء", WEDNESDAY:"الأربعاء", THURSDAY:"الخميس", FRIDAY:"الجمعة" };
+async function loadTgSetup(){
+  state.tgLoading = true; render();
+  const r = await api("getTgSetup");
+  state.tgLoading = false;
+  if(r.ok) state.tg = r; else alert(r.error || "تعذر التحميل — تأكد أن الخادم 1.6");
+  render();
+}
+function tgFormVals(){
+  const v = id => (document.getElementById(id)||{}).value;
+  const flags = {}; Object.keys(TG_FLAG_NAMES).forEach(k=>{ const el = document.getElementById("tg-f-"+k); flags[k] = el && el.checked ? 1 : 0; });
+  return { token:(v("tg-token")||"").trim(), chat:(v("tg-chat")||"").trim(), flags, day:v("tg-day"), hour:Number(v("tg-hour")) };
+}
+async function saveTgSetup(){
+  const f = tgFormVals(), cur = state.tg || {};
+  if(!f.token && !cur.hasToken){ alert("ضع توكن البوت"); return; }
+  if(!/^-?\d{5,20}$/.test(f.chat)){ alert("رقم المجموعة غير صحيح. اضغط «اكتشاف المجموعة» أو انسخه كما هو (يبدأ بـ -100)."); return; }
+  const payload = { chat:f.chat, title: (state.tgChats||[]).find(c=>c.id===f.chat)?.title || (f.chat===cur.chat ? cur.title : ""), flags:f.flags, day:f.day, hour:f.hour };
+  if(f.token) payload.token = f.token;
+  const r = await api("setTgSetup", payload);
+  if(!r.ok){ alert(r.error || "تعذر الحفظ"); return; }
+  state.tg = r; showToast("حُفظت إعدادات التلغرام ✓"); render();
+}
+async function discoverTg(){
+  const f = tgFormVals();
+  const r = await api("tgDiscover", f.token ? { token:f.token } : {});
+  if(!r.ok){ alert(r.error || "تعذر"); return; }
+  state.tgChats = r.chats;
+  if(!r.chats.length) alert("لم يصل شيء بعد. أضف البوت إلى المجموعة، واكتب فيها /start ثم اضغط «اكتشاف المجموعة» مرة أخرى.");
+  render();
+  if(r.chats.length===1){ const el = document.getElementById("tg-chat"); if(el) el.value = r.chats[0].id; }
+}
+function pickTgChat(id){ const el = document.getElementById("tg-chat"); if(el) el.value = id; }
+async function testTg(){
+  const r = await api("tgTest");
+  if(r.ok) showToast("وصلت رسالة التجربة ✓ — تحقق من المجموعة"); else alert(r.error || "فشل الإرسال");
+}
+async function weeklyTgNow(){
+  const r = await api("tgWeeklyNow");
+  if(r.ok) showToast("أُرسلت الإحصائية ✓"); else alert(r.error || "فشل الإرسال");
+}
+function renderTgSetupPanel(){
+  const t = state.tg;
+  if(!t) return `<div class="panel"><h3>إشعارات التلغرام — مجموعة المالية</h3>
+    <div class="undo-hint">كل دفعة وكل حركة صندوق وجرد تصل فورًا إلى مجموعة المالية، مع إحصائية أسبوعية وتنبيه إذا لم تصل هدية للراوتر. رسائل تفعيل الهدايا نفسها يرسلها الراوتر إلى مجموعة البوت بعد أن تُطبَّق فعلًا.</div>
+    <button class="btn secondary" onclick="loadTgSetup()">${state.tgLoading ? "جارِ التحميل..." : "إعداد الإشعارات"}</button></div>`;
+  const chats = state.tgChats || [];
+  const hours = Array.from({length:24},(_,h)=>`<option value="${h}" ${t.hour===h?"selected":""}>${String(h).padStart(2,"0")}:00</option>`).join("");
+  return `<div class="panel">
+    <h3>إشعارات التلغرام — مجموعة المالية</h3>
+    <div class="undo-hint">التوكن يُحفظ في الخادم فقط، ولا يظهر هنا ولا في الشيت. إذا فشل الإرسال لا يتأثر الحفظ، وتُعاد الرسالة لاحقًا تلقائيًا.${t.queued ? ` <b>في الانتظار الآن: ${t.queued} رسالة.</b>` : ""}</div>
+    <div class="form-row">
+      <div style="flex:2"><label>توكن البوت ${t.hasToken ? `<span class="pill ok">محفوظ <span dir="ltr">${escAttr(t.tokenHint)}</span></span>` : ""}</label>
+        <input id="tg-token" type="password" dir="ltr" autocomplete="off" placeholder="${t.hasToken ? "اتركه فارغًا للإبقاء على المحفوظ" : "123456789:AA..."}" /></div>
+      <div style="flex:2"><label>رقم المجموعة${t.title ? ` — ${escAttr(t.title)}` : ""}</label>
+        <input id="tg-chat" dir="ltr" value="${escAttr(t.chat||"")}" placeholder="-100..." /></div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"><button class="btn secondary small" onclick="discoverTg()">🔍 اكتشاف المجموعة</button>
+      ${chats.map(c=>`<button class="btn secondary small" onclick='pickTgChat(${JSON.stringify(c.id)})'>${escAttr(c.title||c.id)} <span dir="ltr" style="opacity:.7">${escAttr(c.id)}</span></button>`).join("")}</div>
+    <div style="display:grid;gap:6px;margin-bottom:10px">${Object.keys(TG_FLAG_NAMES).map(k=>`<label style="display:flex;gap:8px;align-items:center;margin:0;font-size:13.5px"><input type="checkbox" id="tg-f-${k}" style="width:auto;margin:0" ${t.flags && t.flags[k] ? "checked" : ""}/> ${TG_FLAG_NAMES[k]}</label>`).join("")}</div>
+    <div class="form-row"><div><label>الإحصائية الأسبوعية: اليوم</label><select id="tg-day">${Object.keys(TG_DAY_NAMES).map(d=>`<option value="${d}" ${t.day===d?"selected":""}>${TG_DAY_NAMES[d]}</option>`).join("")}</select></div>
+      <div><label>الساعة</label><select id="tg-hour">${hours}</select></div></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" onclick="saveTgSetup()">حفظ</button><button class="btn secondary" onclick="testTg()">✉ رسالة تجربة</button><button class="btn secondary" onclick="weeklyTgNow()">📊 أرسل الإحصائية الآن</button></div>
+  </div>`;
+}
+
+// ======================= WhatsApp: normal or Business (per device) =======================
+function isAndroid(){ return /Android/i.test(navigator.userAgent||""); }
+function waApp(){ try{ return localStorage.getItem("isp_wa_app") || "business"; }catch(e){ return "business"; } }
+function toggleWaApp(){
+  const next = waApp()==="business" ? "normal" : "business";
+  try{ localStorage.setItem("isp_wa_app", next); }catch(e){}
+  showToast(next==="business" ? "الرسائل تُفتح في واتساب بزنس" : "الرسائل تُفتح في واتساب العادي");
+  render();
+}
+// on Android the message goes straight to the chosen app; if it is not installed the normal link opens instead
+function openWa(phone, message){
+  const web = waLink(phone, message);
+  if(!isAndroid()){ window.open(web, "_blank"); return; }
+  const pkg = waApp()==="business" ? "com.whatsapp.w4b" : "com.whatsapp";
+  const num = toWhatsAppNumber(phone);
+  location.href = `intent://send/?phone=${num}&text=${encodeURIComponent(message||"")}#Intent;scheme=whatsapp;package=${pkg};S.browser_fallback_url=${encodeURIComponent(web)};end`;
+}
+// ======================= receiver picker (no default for a new payment) =======================
+function rcvPickerHtml(prefix, value){
+  const b = (v, label) => `<button type="button" class="btn ${value===v ? "" : "secondary"} rcv-btn" data-v="${v}" onclick="pickRcv('${prefix}','${v}')">${label}</button>`;
+  return `<div class="rcv-pick" id="${prefix}-rcv-pick">${b("mohammed","💵 نقدًا — محمد")}${b("firas","📲 شام كاش — فراس")}</div><input type="hidden" id="${prefix}-receiver" value="${value||""}" />`;
+}
+function pickRcv(prefix, v){
+  const inp = document.getElementById(prefix+"-receiver"); if(inp) inp.value = v;
+  document.querySelectorAll(`#${prefix}-rcv-pick .rcv-btn`).forEach(b=>{ b.className = "btn rcv-btn" + (b.dataset.v===v ? "" : " secondary"); });
+}
 
 // ======================= REWARD: مكافأة الملتزمين (⚡ مضاعفة السرعة أو 🌙 مفتوح ليلي) =======================
 // The app adds / removes only the tags in the PPPoE account comment (#2X=yyyy-MM-dd, #VIP).
@@ -1167,14 +1364,14 @@ function sendReward(id){
 function sendRewardType(id, type){
   closeRewardModal();
   const c = state.customers.find(x=>x.id===id); if(!c) return;
-  window.open(waLink(c.phone, buildRewardMessage(c, type, rwCanApply(c))), "_blank");
+  openWa(c.phone, buildRewardMessage(c, type, rwCanApply(c)));
   recordReward(id, "sent", type);
 }
 // reward found on the router (put by hand): message only, nothing to apply
 function sendRewardMsg(id){
   const c = state.customers.find(x=>x.id===id); if(!c) return;
   if(!String(c.phone||"").replace(/\D/g,"")){ openCustomerEditModal(id, { askPhone:true }); return; }
-  window.open(waLink(c.phone, buildRewardMessage(c, rwKind(c, currentMonthKey), false)), "_blank");
+  openWa(c.phone, buildRewardMessage(c, rwKind(c, currentMonthKey), false));
   recordReward(id, "msg");
 }
 function ackManualReward(id){ recordReward(id, "msg"); }
@@ -1311,7 +1508,7 @@ function newClientId(){ return "c-" + Math.random().toString(36).slice(2,10) + D
 // so "recorded by" in the sheet and in the activity log stays truthful
 function queueOutbox(action, payload){
   const q = getOutbox();
-  q.push({ qid:newQid(), action, payload, ts:Date.now(), by: state.user ? state.user.username : "" });
+  q.push({ qid:newQid(), action, payload: { ...payload, queuedAt: payload.queuedAt || new Date().toISOString() }, ts:Date.now(), by: state.user ? state.user.username : "" });
   setOutbox(q);
 }
 function removeFromOutbox(qid){ setOutbox(getOutbox().filter(x=>x.qid!==qid)); }
@@ -1814,6 +2011,7 @@ function render(){
       <div class="topbar-right">
         <span class="sidebar-user-info">${state.user.name} — ${state.user.role==='admin'?'مدير':'محاسب'}</span>
         <button class="theme-toggle-btn" onclick="toggleTheme()">${isLight? '🌙 الوضع الليلي' : '☀️ الوضع النهاري'}</button>
+        ${isAndroid() ? `<button class="theme-toggle-btn" onclick="toggleWaApp()" title="أي واتساب تُفتح فيه الرسائل على هذا الجهاز">💬 ${waApp()==="business" ? "واتساب بزنس" : "واتساب العادي"}</button>` : ""}
         <button class="nav-btn" onclick="refreshData()">🔄 تحديث</button>
         <button class="nav-btn" onclick="logout()">تسجيل خروج</button>
       </div>
@@ -1969,6 +2167,7 @@ function renderUsers(){
     <button class="btn" onclick="submitNewUser()">إضافة المستخدم</button>
   </div>
   ${renderMtSetupPanel()}
+  ${renderTgSetupPanel()}
   <div class="panel">
     <h3>النسخ الاحتياطي</h3>
     <div style="font-size:13px;color:var(--muted);margin-bottom:8px">${state.lastBackup ? `آخر نسخة: ${state.lastBackup.slice(0,16).replace("T"," ")} — ${escAttr(state.lastBackupName||"")}` : "لا توجد نسخة بعد. شغّل الدالة setupAll من محرر Apps Script مرة واحدة."}</div>
@@ -2272,7 +2471,7 @@ function sendReminder(id){
   const c = statsFor(base);
   if(!String(c.phone||"").replace(/\D/g,"")){ openCustomerEditModal(id, { askPhone:true }); return; }
   if(c.unpaidCount===0){ alert(`${c.name} لا يوجد عليه أي دين.`); return; }
-  window.open(waLink(c.phone, buildReminderMessage(c, c.unpaidMonths, c.debtAmount)), "_blank");
+  openWa(c.phone, buildReminderMessage(c, c.unpaidMonths, c.debtAmount));
   recordReminder(id);
 }
 async function recordReminder(id){
@@ -2631,7 +2830,7 @@ function customerTotals(c){
 
 // ======================= PDF EXPORT (payments, one year) =======================
 function pdfCell(r){
-  if(r.status==='paid') return { cls:"pe-pd", txt:(Number(r.amount)||0).toLocaleString("en-US") + (r.receivedBy==='firas' ? "*" : "") };
+  if(r.status==='paid') return { cls:"pe-pd", txt:(Number(r.amount)||0).toLocaleString("en-US") + (r.receivedBy==='firas' ? " 📲" : "") };
   if(r.status==='not_subscribed') return { cls:"pe-ns", txt:"غ.م" };
   if(r.status==='not_due_yet') return { cls:"pe-fu", txt:"—" };
   return { cls:"pe-un", txt:"لم يدفع" };
@@ -2730,7 +2929,7 @@ function filteredGridCustomers(){
 }
 
 function gridCellContent(row){
-  if(row.status==='paid') return `<span style="color:var(--accent);font-weight:700">${row.receivedBy==='firas' ? '<span title="تحويل مباشر لفراس" style="color:var(--warn)">●</span> ' : ''}${fmtMoney(row.amount)}</span>`;
+  if(row.status==='paid') return `<span style="color:var(--accent);font-weight:700">${row.receivedBy==='firas' ? '<span title="شام كاش / تحويل مباشر لفراس">📲</span> ' : ''}${fmtMoney(row.amount)}</span>`;
   if(row.status==='not_subscribed') return `<span style="color:var(--muted)">غ.م</span>`;
   if(row.status==='not_due_yet') return `<span style="color:var(--muted)">—</span>`;
   return `<span style="color:var(--danger);font-weight:700">لم يدفع</span>`;
@@ -2777,7 +2976,7 @@ function openGridCellModal(customerId, month){
   const row = rows.find(r=>r.key===month);
   const due = priceFor(c.speed);
   const currentStatus = row ? (row.status==='not_due_yet' ? 'unpaid' : row.status) : 'unpaid';
-  const receiver = (row && row.status==='paid') ? row.receivedBy : 'mohammed';
+  const receiver = (row && row.status==='paid') ? (row.receivedBy==='firas' ? 'firas' : 'mohammed') : '';   // a new payment has no default: choose cash or Sham Cash
   closeEditPaymentModal();
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
@@ -2803,11 +3002,8 @@ function openGridCellModal(customerId, month){
       </div>
       <div class="form-row" id="gcm-receiver-wrap" style="width:100%; display:${currentStatus==='paid'?'block':'none'}">
         <div style="width:100%">
-          <label>من استلم المبلغ؟</label>
-          <select id="gcm-receiver">
-            <option value="mohammed" ${receiver==='mohammed'?'selected':''}>محمد (المحاسب)</option>
-            <option value="firas" ${receiver==='firas'?'selected':''}>فراس مباشرة (تحويل)</option>
-          </select>
+          <label>كيف وصل المبلغ؟</label>
+          ${rcvPickerHtml("gcm", receiver)}
         </div>
       </div>
       <div class="modal-actions">
@@ -2857,7 +3053,9 @@ async function saveGridCell(customerId, month){
   const c = state.customers.find(x=>x.id===customerId);
   const status = document.getElementById('gcm-status').value;
   const amount = status==='paid' ? (Number(document.getElementById('gcm-amount').value)||0) : 0;
-  const receivedBy = status==='paid' ? (document.getElementById('gcm-receiver')?.value==='firas' ? 'firas' : 'mohammed') : undefined;
+  const rcvRaw = document.getElementById('gcm-receiver')?.value || "";
+  if(status==='paid' && !rcvRaw){ alert("اختر كيف وصل المبلغ: 💵 نقدًا لمحمد، أو 📲 شام كاش لفراس."); return; }
+  const receivedBy = status==='paid' ? (rcvRaw==='firas' ? 'firas' : 'mohammed') : undefined;
   const wasPaidLocally = state.payments[`${customerId}:${month}`]?.status==='paid';
   closeEditPaymentModal();
 
@@ -2904,7 +3102,7 @@ function buildReceiptData(customerId, items, receivedBy, recordedBy, when){
     customer: { name:base.name, mikrotik:base.mikrotik||"—", speed:base.speed, phone:base.phone||"" },
     items: items.map(x=>({ label: monthLabelOf(x.month), amount: Number(x.amount)||0 })),
     total: items.reduce((s,x)=>s+(Number(x.amount)||0),0),
-    receivedBy: receivedBy==='firas' ? "فراس (تحويل مباشر)" : receivedBy==='mixed' ? "محمد + فراس" : "محمد (المحاسب)",
+    receivedBy: receivedBy==='firas' ? "فراس (شام كاش / تحويل)" : receivedBy==='mixed' ? "محمد + فراس" : "محمد (نقدًا)",
     recordedBy: recordedBy || (state.user && state.user.name) || "",
     remaining: st.debtAmount,
     remainingMonths: st.unpaidMonths.map(r=>r.label),
@@ -3005,7 +3203,7 @@ function openReceiptModal(customerId, items, receivedBy, recordedBy, when){
   let cv;
   try{ cv = drawReceipt(data); }
   catch(e){   // a browser that cannot draw images: fall back to the text confirmation
-    if(String(data.customer.phone).replace(/\D/g,"") && confirm("تم تسجيل الدفعة. هل تريد إرسال تأكيد عبر واتساب؟")) window.open(waLink(data.customer.phone, receiptText(data)), "_blank");
+    if(String(data.customer.phone).replace(/\D/g,"") && confirm("تم تسجيل الدفعة. هل تريد إرسال تأكيد عبر واتساب؟")) openWa(data.customer.phone, receiptText(data));
     return;
   }
   const url = cv.toDataURL("image/png");
@@ -3044,7 +3242,7 @@ async function copyReceiptAndOpenChat(){
   if(!r) return;
   let copied = false;
   try{ if(r.blob && navigator.clipboard && window.ClipboardItem){ await navigator.clipboard.write([new ClipboardItem({ "image/png": r.blob })]); copied = true; } }catch(e){}
-  window.open(waLink(r.data.customer.phone, copied ? "" : receiptText(r.data)), "_blank");
+  openWa(r.data.customer.phone, copied ? "" : receiptText(r.data));
   showToast(copied ? "نُسخت الصورة — الصقها في المحادثة (Ctrl+V)" : "تعذر نسخ الصورة؛ فتحت المحادثة برسالة نصية", 5000);
 }
 function downloadReceipt(){
@@ -3057,7 +3255,7 @@ function downloadReceipt(){
 function sendReceiptText(){
   const r = receiptCurrent;
   if(!r) return;
-  window.open(waLink(r.data.customer.phone, receiptText(r.data)), "_blank");
+  openWa(r.data.customer.phone, receiptText(r.data));
 }
 // ---- one receipt for several paid months (picked by the user; today's payments are pre-selected) ----
 function openMultiReceipt(customerId){
@@ -3079,7 +3277,7 @@ function openMultiReceipt(customerId){
       ${paid.map((r,i)=>`
         <label style="display:flex;align-items:center;gap:8px;margin:0 0 6px;cursor:pointer">
           <input type="checkbox" id="mr-on-${i}" data-month="${r.key}" ${preDay && dayOf(r)===preDay ? "checked" : ""} onchange='updateMultiReceiptTotal(${JSON.stringify(customerId)}, ${paid.length})' style="width:auto" />
-          <span style="flex:1">${r.label}<span style="color:var(--muted);font-size:11.5px"> · ${r.date ? isoToDateStr(r.date) : "بدون تاريخ"}${r.receivedBy==='firas' ? " · فراس" : ""}</span></span>
+          <span style="flex:1">${r.label}<span style="color:var(--muted);font-size:11.5px"> · ${r.date ? isoToDateStr(r.date) : "بدون تاريخ"}${r.receivedBy==='firas' ? " · 📲 فراس" : ""}</span></span>
           <b>${fmtMoney(r.amount)}</b>
         </label>`).join("")}
       <div id="mr-total" style="font-weight:700;margin:10px 0"></div>
@@ -3159,7 +3357,7 @@ function renderStatementBody(customer){
     <tbody>${rows.map(r=>`<tr><td>${r.label}</td><td>${fmtMoney(r.due)}</td>
       <td>${r.stopped ? '<span class="pill">موقوف</span>' : statusPill(r.status)}</td>
       <td>${r.status==='paid'?isoToDateStr(r.date):"—"}</td>
-      <td>${r.status==='paid'?((r.recordedBy||"—") + (r.receivedBy==='firas' ? ' · تحويل مباشر لفراس' : '')):"—"}</td>
+      <td>${r.status==='paid'?((r.recordedBy||"—") + (r.receivedBy==='firas' ? ' · 📲 شام كاش لفراس' : ' · 💵 نقدًا')):"—"}</td>
       <td class="no-print action-cell"><button class="btn secondary small" onclick='openGridCellModal(${JSON.stringify(customer.id)},"${r.key}")'>تعديل</button>${r.status==='paid'?`<button class="btn secondary small" title="إيصال" onclick='receiptForRow(${JSON.stringify(customer.id)},"${r.key}")'>🧾</button>`:""}</td></tr>`).join("")}</tbody></table>
     <div class="stat-grid" style="margin-top:16px;margin-bottom:0">
       <div class="stat-card accent"><div class="label">إجمالي المدفوع</div><div class="value">${fmtMoney(totalPaid)}</div></div>
@@ -3204,8 +3402,7 @@ async function payAllOverdueForCustomer(id){
           <label for="pa-on-${i}" style="flex:1;margin:0">${r.label}</label>
           <input id="pa-amt-${i}" type="number" value="${r.due}" oninput="updatePayAllTotal(${unpaid.length})" style="width:130px" />
         </div>`).join("")}
-      <div class="form-row" style="margin-top:8px"><div><label>من استلم المبلغ؟</label>
-        <select id="pa-receiver"><option value="mohammed">محمد (المحاسب)</option><option value="firas">فراس مباشرة (تحويل)</option></select></div></div>
+      <div style="margin-top:8px"><label>كيف وصل المبلغ؟</label>${rcvPickerHtml("pa", "")}</div>
       <div id="pa-total" style="font-weight:700;margin:8px 0"></div>
       <div class="modal-actions">
         ${holdBtn("⏳ اضغط مطوّلًا لتسجيل الدفع", "confirmPayAll", [customer.id, unpaid.map(r=>r.key)], {kind:"ok"})}
@@ -3235,12 +3432,15 @@ async function confirmPayAll(customerId, keys, _held){
     picks.push({ month:keys[i], amount });
   }
   if(!picks.length){ alert("لم تحدد أي شهر."); return; }
-  const receivedBy = document.getElementById("pa-receiver")?.value==='firas' ? 'firas' : 'mohammed';
+  const rcvRaw = document.getElementById("pa-receiver")?.value || "";
+  if(!rcvRaw){ alert("اختر كيف وصل المبلغ: 💵 نقدًا لمحمد، أو 📲 شام كاش لفراس."); return; }
+  const receivedBy = rcvRaw==='firas' ? 'firas' : 'mohammed';
   closePayAllModal();
   showToast(`جارِ تسجيل ${picks.length} شهر...`, 60000);
   let saved = 0; const savedPicks = []; const undoGroup = newUndoGroup(); let undoable = 0;
-  for(const p of picks){
-    const res = await api("setPaymentStatus", {customerId, month:p.month, status:'paid', amount:p.amount, receivedBy, expectNew:true, undoGroup});
+  for(let pi=0; pi<picks.length; pi++){
+    const p = picks[pi];
+    const res = await api("setPaymentStatus", {customerId, month:p.month, status:'paid', amount:p.amount, receivedBy, expectNew:true, undoGroup, groupLast: pi===picks.length-1});
     if(res.ok && res.undoId) undoable++;
     if(res.alreadyPaid) continue;   // someone recorded this month a moment ago: leave it untouched
     if(res.networkError){ queueOutbox("setPaymentStatus", {customerId, month:p.month, status:'paid', amount:p.amount, receivedBy, expectNew:true}); applyLocalPaymentUpdate(customerId, p.month, 'paid', p.amount, state.user.name, receivedBy); saved++; savedPicks.push(p); continue; }
@@ -3260,7 +3460,7 @@ function sendStatementWA(){
   const rows = allRows.filter(r=>r.year===state.viewYear || r.status==='unpaid');
   const totalPaid = allRows.reduce((s,r)=>s+(r.status==='paid'?r.amount:0),0);
   const totalDue = allRows.filter(r=>r.status==='unpaid').reduce((s,r)=>s+r.due,0);
-  window.open(waLink(customer.phone, buildStatementMessage(customer, rows, totalPaid, totalDue)), "_blank");
+  openWa(customer.phone, buildStatementMessage(customer, rows, totalPaid, totalDue));
 }
 
 // ======================= FINANCIAL BOX (الصندوق المالي) =======================
