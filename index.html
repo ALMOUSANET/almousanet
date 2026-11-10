@@ -451,11 +451,12 @@ function holdEnd(btn){
 
 // ======================= VERSION =======================
 // Raise this number together with SERVER_VERSION in Code.gs on every update.
-const APP_VERSION = "1.9";
+const APP_VERSION = "2.0";
 const APP_VERSION_DATE = "2026-11-10";
 // the lowest Code.gs version this page works with (raise it only when the page needs something new from the server)
-const MIN_SERVER_VERSION = "1.7";
+const MIN_SERVER_VERSION = "1.8";
 const CHANGELOG = [
+  { v:"2.0", date:"2026-11-10", notes:"تكامل حالة الإيقاف بين الصفحات: سبب التوقف يتبع الدين تلقائيًا (موقوف وعليه دين = «موقوف لعدم الدفع»، مسدّد = «متوقف») حتى بعد أي دفعة. خيار «⛔ موقوف بسبب عدم الدفع» في نافذة الشهر الحالي بصفحة الدفعات ثم سؤال قطع النت. تحت «لم يدفع» تظهر عبارة «موقوف لعدم الدفع» لآخر شهر، وللحساب المعطّل على الراوتر اقتراح «سجّله موقوف». زر «🧹 تصحيح أسباب التوقف» بصفحة الزبائن يصحّح القديم بعد معاينة. يحتاج Code.gs 1.8." },
   { v:"1.8", date:"2026-11-09", notes:"إشعارات مجموعة المالية على التلغرام: كل دفعة (و«دفع كل المتأخر» رسالة واحدة) وتعديلها وإلغاؤها، حركات الصندوقين، الجرد والتسوية، التراجع، وتنبيه إذا لم تصل هدية للراوتر خلال ساعة، وإحصائية أسبوعية (المسددون، غير المسددين، المحصّل، المكافأون، المتأخرون). الإعداد في صفحة المستخدمين. سكربت راوتر v3: يرسل إلى مجموعة البوت رسالة تفعيل الهدية بعد أن يتحقق أنها طُبّقت فعلًا، أو سبب الفشل، ويتابع الهدايا المؤجلة حتى تُطبَّق. عند تسجيل دفعة جديدة يجب اختيار «💵 نقدًا — محمد» أو «📲 شام كاش — فراس» (لا يوجد اختيار افتراضي)، وعلامة 📲 بجانب دفعات شام كاش. تعديل المستلم لدفعة قديمة يحافظ على تاريخها. زر في الأعلى (على أندرويد) لاختيار واتساب العادي أو بزنس لكل جهاز. (يحتاج الخادم 1.6)" },
   { v:"1.7.1", date:"2026-11-09", notes:"إعادة تحسين الواجهة الذي ضاع مع تحديثات 1.5–1.7: ألوان من أخضر الشعار (أخضر مدفوع، أصفر وعد، أحمر دين)، خط Readex Pro للعناوين والأرقام، شبكة مربعات دفعات الشهر في أعلى الرئيسية (مربع لكل مشترك يفتح بطاقته)، بطاقات الأرقام في شريط واحد، وقائمة الجوال سطر واحد يُمرَّر. (الصفحة فقط، الخادم يبقى 1.5)" },
   { v:"1.7", date:"2026-11-09", notes:"المكافأة تُطبَّق على الراوتر مباشرة: عند الإرسال تختار ⚡ مضاعفة السرعة (الافتراضي) أو 🌙 مفتوح ليلي، فيضع التطبيق الوسم #2X=آخر يوم في الشهر أو #VIP على حساب المشترك، والراوتر يطبّقه خلال 20 دقيقة كحد أقصى عبر سكربتاتك (X2_Apply والوضع الليلي)، وتنتهي المكافأة تلقائيًا بنهاية الشهر. حالة كل أمر ظاهرة: ⏳ بانتظار الراوتر ← ✓ طُبّقت أو ✗ فشلت مع السبب وزر إعادة المحاولة. أي مكافأة توضع يدويًا (البوت، شبكتي، وينبوكس) تُكتشف وتُسجَّل وتبقى رسالتها جاهزة مع تنبيه. السرعة الفعلية تظهر للاطلاع والسعر يبقى على السرعة المدفوعة. سكربت راوتر جديد (كل 20 دقيقة) وتنبيه بالبريد إذا توقفت المزامنة أكثر من ساعة. (يحتاج الخادم 1.5)" },
@@ -714,6 +715,25 @@ function addMonths(key, n){
   let y = +key.slice(0,4), m = +key.slice(5,7) - 1 + n;
   y += Math.floor(m/12); m = ((m%12)+12)%12;
   return `${y}-${String(m+1).padStart(2,"0")}`;
+}
+async function fixStopReasonsUi(){
+  const r = await api("fixStopReasons", {dry:true});
+  if(r.networkError){ alert("لا يوجد اتصال — أعد المحاولة."); return; }
+  if(!r.ok){ alert(r.error || "تعذر الفحص"); return; }
+  const L = r.changes || [];
+  if(!L.length){ alert("كل الحسابات الموقوفة أسبابها صحيحة ✓"); return; }
+  const nm = {debt:"لعدم الدفع", left:"متوقف", none:"بدون سبب"};
+  const toLeft = L.filter(x=>x.to==="left"), toDebt = L.filter(x=>x.to==="debt");
+  const fmt = a => a.slice(0,15).map(x=>"• "+x.name).join("\n") + (a.length>15 ? `\n… و${a.length-15} آخرين` : "");
+  const msg = `سيتغيّر ${L.length} حساب:\n\n` +
+    (toLeft.length ? `🚪 إلى «${nm.left}» (مسدّدون): ${toLeft.length}\n${fmt(toLeft)}\n\n` : "") +
+    (toDebt.length ? `⛔ إلى «${nm.debt}» (عليهم دين): ${toDebt.length}\n${fmt(toDebt)}\n\n` : "") +
+    "ما في قطع ولا تفعيل على الراوتر. تطبيق التغيير؟";
+  if(!confirm(msg)) return;
+  const r2 = await api("fixStopReasons", {});
+  if(!r2.ok){ alert(r2.error || "تعذر التطبيق"); return; }
+  showToast(`تم تصحيح ${r2.changed} حساب ✓`, 3500);
+  await loadAllData();
 }
 async function setCustStatus(id, status){
   const r = await api("setCustomerStatus", {id, status});
@@ -2519,13 +2539,14 @@ function followUpMini(c){
   return parts.join(" · ");
 }
 function gridRowActs(c, debt){
-  if(!(debt > 0)) return "";
+  const sug = stopSuggestHtml(c, debt);
+  if(!(debt > 0)) return sug;
   const hasPhone = !!String(c.phone||"").replace(/\D/g,"");
   return `<div class="row-acts no-print">
       <button class="wa ${hasPhone?'':'off'}" title="${hasPhone?'تذكير واتساب':'لا يوجد رقم — اضغط لإضافته'}" onclick='event.stopPropagation(); sendReminder(${JSON.stringify(c.id)})'>💬 تذكير</button>
       <button title="وعد بالدفع" onclick='event.stopPropagation(); openPromiseModal(${JSON.stringify(c.id)})'>🤝 وعد</button>
     </div>
-    <div class="follow-mini" data-follow-mini="${c.id}">${followUpMini(c)}</div>`;
+    <div class="follow-mini" data-follow-mini="${c.id}">${followUpMini(c)}</div>${sug}`;
 }
 function refreshFollowCells(id){
   if(!document.querySelectorAll) return;
@@ -2715,6 +2736,7 @@ function renderCustomers(){
         <input id="customer-search-input" style="width:100%" value="${escAttr(state.customerSearch)}" oninput="onCustomerSearchInput(this.value)" placeholder="اكتب للبحث..." />
       </div>
     </div>
+    ${state.user && state.user.role==="admin" ? `<div style="margin-bottom:10px"><button class="btn secondary small" onclick="fixStopReasonsUi()">🧹 تصحيح أسباب التوقف</button> <span class="undo-hint" style="display:inline">الموقوف وعليه دين = «لعدم الدفع»، والمسدّد = «متوقف»</span></div>` : ""}
     <div id="customers-table-wrap">${renderCustomersTableOnly()}</div>
   </div>
   ${renderMtPanel()}
@@ -3003,6 +3025,20 @@ function filteredGridCustomers(){
   return list;
 }
 
+// 2.0: the last unpaid month of a customer stopped for non-payment (the month he was stopped, or the latest unpaid one before it) — shown in his statement
+function debtStopKey(c){
+  if(!c || c.active!==false || c.stopReason!=='debt') return "";
+  const s = (c.stops||[]).filter(p=>p && !p.t).pop();
+  const lim = s && s.f ? addMonths(s.f,-1) : currentMonthKey;
+  const u = getStatementRows(c).filter(r=>r.status==='unpaid' && r.key<=lim);
+  return u.length ? u[u.length-1].key : "";
+}
+// active in the app but disabled on the router (cut from Winbox, the panel or the bot): suggest recording it
+function stopSuggestHtml(c, debt){
+  if(!c || c.active===false || !c.mikrotik || c.mtState!=="off") return "";
+  const lbl = debt>0 ? "⛔ سجّله موقوفًا لعدم الدفع" : "🚪 سجّله متوقفًا";
+  return `<div class="row-acts no-print" style="margin-top:4px"><div class="undo-meta" style="color:var(--danger,#e5484d)">⚠️ معطّل على الراوتر</div><button title="يسجّله في البرنامج حسب دينه" onclick='event.stopPropagation(); setCustStatus(${JSON.stringify(c.id)},"off")'>${lbl}</button></div>`;
+}
 function gridCellContent(row){
   if(row.status==='paid') return `<span style="color:var(--accent);font-weight:700">${row.receivedBy==='firas' ? '<span title="شام كاش / تحويل مباشر لفراس">📲</span> ' : ''}${fmtMoney(row.amount)}</span>`;
   if(row.status==='not_subscribed') return `<span style="color:var(--muted)">غ.م</span>`;
@@ -3051,6 +3087,9 @@ function openGridCellModal(customerId, month){
   const row = rows.find(r=>r.key===month);
   const due = priceFor(c.speed);
   const currentStatus = row ? (row.status==='not_due_yet' ? 'unpaid' : row.status) : 'unpaid';
+  // 2.0: "stopped for non-payment" is offered for the CURRENT month only (a past month cannot be "cut now")
+  const stopOpt = month===currentMonthKey && currentStatus!=='paid';
+  const preStop = stopOpt && c.active===false && c.stopReason==='debt';
   const receiver = (row && row.status==='paid') ? (row.receivedBy==='firas' ? 'firas' : 'mohammed') : '';   // a new payment has no default: choose cash or Sham Cash
   closeEditPaymentModal();
   const overlay = document.createElement('div');
@@ -3064,9 +3103,11 @@ function openGridCellModal(customerId, month){
           <label>الحالة</label>
           <select id="gcm-status" onchange="onGcmStatusChange(this.value)">
             <option value="paid" ${currentStatus==='paid'?'selected':''}>مدفوع</option>
-            <option value="unpaid" ${currentStatus==='unpaid'?'selected':''}>لم يدفع</option>
-            <option value="not_subscribed" ${currentStatus==='not_subscribed'?'selected':''}>غير مشترك</option>
+            <option value="unpaid" ${currentStatus==='unpaid'&&!preStop?'selected':''}>لم يدفع</option>
+            <option value="not_subscribed" ${currentStatus==='not_subscribed'&&!preStop?'selected':''}>غير مشترك</option>
+            ${stopOpt ? `<option value="stop_debt" ${preStop?'selected':''}>⛔ موقوف بسبب عدم الدفع</option>` : ""}
           </select>
+          <div id="gcm-stop-hint" style="display:${preStop?'block':'none'};font-size:12px;color:var(--muted);margin-top:6px">يُسجَّل الزبون «موقوفًا لعدم الدفع»، ثم تُسأل إن كنت تريد قطع النت عنه على الراوتر. لا يُقطع شيء بدون موافقتك.</div>
         </div>
       </div>
       <div class="form-row" id="gcm-amount-wrap" style="width:100%; display:${currentStatus==='paid'?'block':'none'}">
@@ -3092,6 +3133,7 @@ function openGridCellModal(customerId, month){
 function onGcmStatusChange(v){
   const show = v==='paid' ? 'block' : 'none';
   ['gcm-amount-wrap','gcm-receiver-wrap'].forEach(id=>{ const el = document.getElementById(id); if(el) el.style.display = show; });
+  const h = document.getElementById('gcm-stop-hint'); if(h) h.style.display = v==='stop_debt' ? 'block' : 'none';
 }
 function closeEditPaymentModal(){
   const el = document.getElementById('edit-payment-overlay');
@@ -3127,6 +3169,7 @@ function applyLocalPaymentUpdate(customerId, month, status, amount, recordedBy, 
 async function saveGridCell(customerId, month){
   const c = state.customers.find(x=>x.id===customerId);
   const status = document.getElementById('gcm-status').value;
+  if(status==='stop_debt'){ closeEditPaymentModal(); await setCustStatus(customerId, 'debt'); return; }   // 2.0: record it, then ask before cutting
   const amount = status==='paid' ? (Number(document.getElementById('gcm-amount').value)||0) : 0;
   const rcvRaw = document.getElementById('gcm-receiver')?.value || "";
   if(status==='paid' && !rcvRaw){ alert("اختر كيف وصل المبلغ: 💵 نقدًا لمحمد، أو 📲 شام كاش لفراس."); return; }
@@ -3157,6 +3200,8 @@ async function saveGridCell(customerId, month){
   }
 
   if(status==='paid'){ openReceiptModal(customerId, [{ month, amount }], receivedBy, state.user.name); offerRestoreAfterPay(customerId); }
+  // 2.0: the server may have changed a stopped customer's reason after this payment (paid up = "متوقف")
+  if(c && c.active===false) loadAllData(true);
 }
 
 // ======================= PAYMENT RECEIPT (إيصال دفع — image for WhatsApp) =======================
@@ -3415,6 +3460,7 @@ function renderStatementBody(customer){
   const totalDue = allRows.reduce((s,r)=>s+(r.status==='unpaid'?r.due:0),0);
   const unpaidCount = allRows.filter(r=>r.status==='unpaid').length;
   const otherYearsDue = allRows.filter(r=>r.status==='unpaid' && r.year!==state.viewYear).reduce((s,r)=>s+r.due,0);
+  const dskKey = debtStopKey(customer);   // 2.0: «موقوف لعدم الدفع» under the last unpaid month
   return `
   <div class="panel no-print" style="display:flex;gap:10px;flex-wrap:wrap">
     <button class="btn" onclick="finishPdfExport(); window.print()">طباعة / حفظ PDF</button>
@@ -3430,7 +3476,7 @@ function renderStatementBody(customer){
     <div style="font-size:12.5px;color:var(--muted);margin-bottom:6px">أشهر ${state.viewYear}</div>
     <table><thead><tr><th>الشهر</th><th>المستحق</th><th>الحالة</th><th>تاريخ الدفع</th><th>سجّلها</th><th class="no-print"></th></tr></thead>
     <tbody>${rows.map(r=>`<tr><td>${r.label}</td><td>${fmtMoney(r.due)}</td>
-      <td>${r.stopped ? '<span class="pill">موقوف</span>' : statusPill(r.status)}</td>
+      <td>${r.stopped ? '<span class="pill">موقوف</span>' : statusPill(r.status)}${r.status==='unpaid' && r.key===dskKey ? '<div style="font-size:11px;color:var(--danger);font-weight:700;margin-top:3px">⛔ موقوف لعدم الدفع</div>' : ""}</td>
       <td>${r.status==='paid'?isoToDateStr(r.date):"—"}</td>
       <td>${r.status==='paid'?((r.recordedBy||"—") + (r.receivedBy==='firas' ? ' · 📲 شام كاش لفراس' : ' · 💵 نقدًا')):"—"}</td>
       <td class="no-print action-cell"><button class="btn secondary small" onclick='openGridCellModal(${JSON.stringify(customer.id)},"${r.key}")'>تعديل</button>${r.status==='paid'?`<button class="btn secondary small" title="إيصال" onclick='receiptForRow(${JSON.stringify(customer.id)},"${r.key}")'>🧾</button>`:""}</td></tr>`).join("")}</tbody></table>
