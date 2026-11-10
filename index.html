@@ -451,11 +451,12 @@ function holdEnd(btn){
 
 // ======================= VERSION =======================
 // Raise this number together with SERVER_VERSION in Code.gs on every update.
-const APP_VERSION = "2.0";
+const APP_VERSION = "2.1";
 const APP_VERSION_DATE = "2026-11-10";
 // the lowest Code.gs version this page works with (raise it only when the page needs something new from the server)
 const MIN_SERVER_VERSION = "1.8";
 const CHANGELOG = [
+  { v:"2.1", date:"2026-11-10", notes:"صفحة الدفعات: الموقوف لعدم الدفع يبقى بالجدول (باهت وبشارة «⛔ موقوف») مع تذكير واتساب ووعد وتسجيل دفعة. فلتر «إظهار» فيه الآن «⛔ موقوفون لعدم الدفع» و«🚪 متوقفون (تركوا الشبكة)». «الكل» = النشطون + الموقوفون لعدم الدفع. لا يتغيّر الخادم (1.8)." },
   { v:"2.0", date:"2026-11-10", notes:"تكامل حالة الإيقاف بين الصفحات: سبب التوقف يتبع الدين تلقائيًا (موقوف وعليه دين = «موقوف لعدم الدفع»، مسدّد = «متوقف») حتى بعد أي دفعة. خيار «⛔ موقوف بسبب عدم الدفع» في نافذة الشهر الحالي بصفحة الدفعات ثم سؤال قطع النت. تحت «لم يدفع» تظهر عبارة «موقوف لعدم الدفع» لآخر شهر، وللحساب المعطّل على الراوتر اقتراح «سجّله موقوف». زر «🧹 تصحيح أسباب التوقف» بصفحة الزبائن يصحّح القديم بعد معاينة. يحتاج Code.gs 1.8." },
   { v:"1.8", date:"2026-11-09", notes:"إشعارات مجموعة المالية على التلغرام: كل دفعة (و«دفع كل المتأخر» رسالة واحدة) وتعديلها وإلغاؤها، حركات الصندوقين، الجرد والتسوية، التراجع، وتنبيه إذا لم تصل هدية للراوتر خلال ساعة، وإحصائية أسبوعية (المسددون، غير المسددين، المحصّل، المكافأون، المتأخرون). الإعداد في صفحة المستخدمين. سكربت راوتر v3: يرسل إلى مجموعة البوت رسالة تفعيل الهدية بعد أن يتحقق أنها طُبّقت فعلًا، أو سبب الفشل، ويتابع الهدايا المؤجلة حتى تُطبَّق. عند تسجيل دفعة جديدة يجب اختيار «💵 نقدًا — محمد» أو «📲 شام كاش — فراس» (لا يوجد اختيار افتراضي)، وعلامة 📲 بجانب دفعات شام كاش. تعديل المستلم لدفعة قديمة يحافظ على تاريخها. زر في الأعلى (على أندرويد) لاختيار واتساب العادي أو بزنس لكل جهاز. (يحتاج الخادم 1.6)" },
   { v:"1.7.1", date:"2026-11-09", notes:"إعادة تحسين الواجهة الذي ضاع مع تحديثات 1.5–1.7: ألوان من أخضر الشعار (أخضر مدفوع، أصفر وعد، أحمر دين)، خط Readex Pro للعناوين والأرقام، شبكة مربعات دفعات الشهر في أعلى الرئيسية (مربع لكل مشترك يفتح بطاقته)، بطاقات الأرقام في شريط واحد، وقائمة الجوال سطر واحد يُمرَّر. (الصفحة فقط، الخادم يبقى 1.5)" },
@@ -2902,6 +2903,8 @@ function renderPayments(){
         <option value="has_debt" ${state.paymentsFilter==="has_debt"?"selected":""}>عليهم ديون فقط</option>
         <option value="no_debt" ${state.paymentsFilter==="no_debt"?"selected":""}>بدون ديون فقط</option>
         <option value="not_subscribed" ${state.paymentsFilter==="not_subscribed"?"selected":""}>غير مشتركين حاليًا</option>
+        <option value="stopped_debt" ${state.paymentsFilter==="stopped_debt"?"selected":""}>⛔ موقوفون لعدم الدفع</option>
+        <option value="left" ${state.paymentsFilter==="left"?"selected":""}>🚪 متوقفون (تركوا الشبكة)</option>
       </select>
     </div>
   </div>
@@ -2956,15 +2959,16 @@ function pdfTableHtml(list, year, withTotals){
 function buildPaymentsPdfHtml(onlyShown){
   const year = state.viewYear;
   const byName = (a,b)=>(a.name||"").localeCompare(b.name||"", 'ar');
-  const active = onlyShown ? filteredGridCustomers() : enabledCustomers().slice().sort(byName);
-  const disabled = onlyShown ? [] : state.customers.filter(c=>c.active===false).slice().sort(byName);
+  const shown = onlyShown ? filteredGridCustomers() : null;
+  const active = onlyShown ? shown.filter(c=>c.active!==false) : enabledCustomers().slice().sort(byName);
+  const disabled = onlyShown ? shown.filter(c=>c.active===false) : state.customers.filter(c=>c.active===false).slice().sort(byName);
   const stale = state.dataStale ? ` · ⚠ نسخة محفوظة وليست محدّثة` : "";
   return `
     <div class="pe-head">
       <div class="pe-title">شبكة الموسى للإنترنت — دفعات المشتركين ${year}</div>
       <div class="pe-meta">تاريخ التصدير: ${todayStr()} · ${active.length} مشترك${onlyShown?" (المعروضون فقط)":""}${disabled.length?` · ${disabled.length} معطّل`:""}${stale}</div>
     </div>
-    ${active.length ? pdfTableHtml(active, year, true) : `<div>لا يوجد مشتركون</div>`}
+    ${active.length ? pdfTableHtml(active, year, true) : (disabled.length ? "" : `<div>لا يوجد مشتركون</div>`)}
     ${disabled.length ? `<h2>مشتركون معطّلون (${disabled.length}) — لا يدخلون في مجاميع الأشهر</h2>${pdfTableHtml(disabled, year, false)}` : ""}
     <div class="pe-legend">المبالغ بالليرة السورية · لم يدفع = مستحق غير مدفوع · غ.م = غير مشترك · — = شهر لم يحن بعد · * = حُوّل مباشرة لفراس · عمود «الدين» = إجمالي المتأخر عبر كل السنوات</div>`;
 }
@@ -2998,11 +3002,15 @@ function filteredGridCustomers(){
   const term = (state.paymentsSearch||"").trim().toLowerCase();
   const sort = state.paymentsSort || "name";
   const filter = state.paymentsFilter || "all";
-  let list = enabledCustomers().slice();
+  // 2.0: «الكل» = النشطون + الموقوفون لعدم الدفع (عليهم دين)؛ المتوقفون (تركوا الشبكة) بفلترهم فقط
+  const isDebtStop = c => c.active===false && c.stopReason==='debt';
+  let list = filter==="stopped_debt" ? state.customers.filter(isDebtStop)
+           : filter==="left" ? state.customers.filter(c=>c.active===false && c.stopReason!=='debt')
+           : state.customers.filter(c=>c.active!==false || isDebtStop(c));
   if(term){
     list = list.filter(c => matchesSearch([c.name, c.mikrotik], term));
   }
-  if(filter!=="all"){
+  if(filter!=="all" && filter!=="stopped_debt" && filter!=="left"){
     list = list.filter(c=>{
       const t = customerTotals(c);
       if(filter==="has_debt") return t.totalDebt>0;
@@ -3048,7 +3056,7 @@ function gridCellContent(row){
 
 function renderPaymentsGridOnly(){
   const list = filteredGridCustomers();
-  if(enabledCustomers().length===0) return `<div class="empty">أضف زبائن أولاً من صفحة الزبائن</div>`;
+  if(state.customers.length===0) return `<div class="empty">أضف زبائن أولاً من صفحة الزبائن</div>`;
   if(list.length===0) return `<div class="empty">لا نتائج مطابقة للبحث</div>`;
   return `
     <table style="min-width:980px; border-collapse:separate; border-spacing:0">
@@ -3059,9 +3067,10 @@ function renderPaymentsGridOnly(){
       <tbody>${list.map(c=>{
         const rows = getStatementRows(c).filter(r=>r.year===state.viewYear);
         const totals = customerTotals(c);
-        return `<tr>
+        const stoppedRow = c.active===false;
+        return `<tr style="${stoppedRow?'opacity:0.7':''}">
           <td class="col-sticky-1">
-            <div style="font-weight:600">${c.name}</div>
+            <div style="font-weight:600">${c.name}${stoppedRow ? ` <span class="pill ${c.stopReason==='debt'?'late':''}" style="font-size:10.5px">${c.stopReason==='debt'?'⛔ موقوف':'🚪 متوقف'}</span>` : ""}</div>
             <div style="color:var(--muted);font-size:11px">${c.mikrotik||"—"}</div>
           </td>
           <td>${c.speed} ميغا</td>
