@@ -451,11 +451,12 @@ function holdEnd(btn){
 
 // ======================= VERSION =======================
 // Raise this number together with SERVER_VERSION in Code.gs on every update.
-const APP_VERSION = "2.1";
+const APP_VERSION = "2.2";
 const APP_VERSION_DATE = "2026-11-10";
 // the lowest Code.gs version this page works with (raise it only when the page needs something new from the server)
 const MIN_SERVER_VERSION = "1.8";
 const CHANGELOG = [
+  { v:"2.2", date:"2026-11-10", notes:"إلغاء الإيقاف من أي مكان: زر «تفعيل» بالزبائن، و«▶ أعِد التفعيل» بجدول الدفعات وقائمة الموقوفين، وخيار «لم يدفع (إعادة تفعيل)» بنافذة الشهر الحالي، وبعد تسجيل دفعة لموقوف: كلها تلغي الإيقاف ثم تسأل «هل تريد تشغيل النت له؟» (لا شيء بدون موافقتك). صفحة الدفعات: «مكافأة الملتزمين» صارت أسفل الصفحة ومغلقة دائمًا وتُفتح بالضغط." },
   { v:"2.1", date:"2026-11-10", notes:"صفحة الدفعات: الموقوف لعدم الدفع يبقى بالجدول (باهت وبشارة «⛔ موقوف») مع تذكير واتساب ووعد وتسجيل دفعة. فلتر «إظهار» فيه الآن «⛔ موقوفون لعدم الدفع» و«🚪 متوقفون (تركوا الشبكة)». «الكل» = النشطون + الموقوفون لعدم الدفع. لا يتغيّر الخادم (1.8)." },
   { v:"2.0", date:"2026-11-10", notes:"تكامل حالة الإيقاف بين الصفحات: سبب التوقف يتبع الدين تلقائيًا (موقوف وعليه دين = «موقوف لعدم الدفع»، مسدّد = «متوقف») حتى بعد أي دفعة. خيار «⛔ موقوف بسبب عدم الدفع» في نافذة الشهر الحالي بصفحة الدفعات ثم سؤال قطع النت. تحت «لم يدفع» تظهر عبارة «موقوف لعدم الدفع» لآخر شهر، وللحساب المعطّل على الراوتر اقتراح «سجّله موقوف». زر «🧹 تصحيح أسباب التوقف» بصفحة الزبائن يصحّح القديم بعد معاينة. يحتاج Code.gs 1.8." },
   { v:"1.8", date:"2026-11-09", notes:"إشعارات مجموعة المالية على التلغرام: كل دفعة (و«دفع كل المتأخر» رسالة واحدة) وتعديلها وإلغاؤها، حركات الصندوقين، الجرد والتسوية، التراجع، وتنبيه إذا لم تصل هدية للراوتر خلال ساعة، وإحصائية أسبوعية (المسددون، غير المسددين، المحصّل، المكافأون، المتأخرون). الإعداد في صفحة المستخدمين. سكربت راوتر v3: يرسل إلى مجموعة البوت رسالة تفعيل الهدية بعد أن يتحقق أنها طُبّقت فعلًا، أو سبب الفشل، ويتابع الهدايا المؤجلة حتى تُطبَّق. عند تسجيل دفعة جديدة يجب اختيار «💵 نقدًا — محمد» أو «📲 شام كاش — فراس» (لا يوجد اختيار افتراضي)، وعلامة 📲 بجانب دفعات شام كاش. تعديل المستلم لدفعة قديمة يحافظ على تاريخها. زر في الأعلى (على أندرويد) لاختيار واتساب العادي أو بزنس لكل جهاز. (يحتاج الخادم 1.6)" },
@@ -766,11 +767,15 @@ async function offerRouterPower(id){
   const c = state.customers.find(x=>x.id===id), need = powerNeed(c);
   if(!need || !canCut() || powerCmdOf(c)) return;
   if(need==="cut"){ if(confirm(`سُجّل «${c.name}» ${custStatusText(c)}.\nحسابه ما زال يعمل على الراوتر. هل تقطع النت عنه أيضًا؟\n\nموافق = اقطع (خلال ${mtInterval()} دقيقة)\nإلغاء = سجّله فقط`)) await routerPower(id, false, true); }
-  else if(confirm(`«${c.name}» نشط في البرنامج لكن حسابه معطّل على الراوتر.\nهل تعيد تفعيله على الراوتر؟`)) await routerPower(id, true, true);
+  else if(confirm(`«${c.name}» صار نشطًا في البرنامج، وحسابه ما زال معطّلًا على الراوتر.\n\nهل تريد تشغيل النت له؟\nموافق = شغّله (خلال ${mtInterval()} دقيقة)\nإلغاء = يبقى معطّلًا على الراوتر`)) await routerPower(id, true, true);
 }
 // after a payment: a subscriber whose account is disabled on the router gets a one-tap restore
 async function offerRestoreAfterPay(id){
   const c = state.customers.find(x=>x.id===id);
+  if(c && c.active===false){   // 2.0.2: paid while stopped -> offer to cancel the stop (the router question follows)
+    if(confirm(`سُجّلت الدفعة ✓\n«${c.name}» ${custStatusText(c)}.\nهل تلغي الإيقاف وتعيده نشطًا؟`)) await setCustStatus(id, "active");
+    return;
+  }
   if(!c || !c.mikrotik || c.mtState!=="off" || !canCut() || powerCmdOf(c)) return;
   if(confirm(`سُجّلت الدفعة ✓\nحساب «${c.name}» معطّل على الراوتر. هل تعيد تفعيله؟\n(يرجع خلال ${mtInterval()} دقيقة ويصير «نشط» تلقائيًا)`)) await routerPower(id, true, true);
 }
@@ -1502,7 +1507,7 @@ function renderRewardPanel(){
   const sync = mt.configured || mt.last
     ? `<div class="undo-meta" style="margin-top:4px">🔄 ${escAttr(mtLastText(mt))} · الراوتر يسأل كل ${mtInterval()} دقيقة${mt.boost ? " · 🚀 BOOST مفعّل للجميع الآن" : ""}${mt.night ? " · 🌙 الوضع الليلي يعمل الآن" : ""}</div>${mt.last && !mt.tags ? `<div class="offline-banner" style="margin:8px 0">⚠ سكربت الراوتر قديم: لن تُطبَّق المكافآت تلقائيًا. حدّثه من صفحة «المستخدمون» ← «ربط المايكروتك».</div>` : ""}`
     : `<div class="undo-meta" style="margin-top:4px">المزامنة مع الراوتر غير مفعّلة: تُرسل الرسالة فقط.</div>`;
-  return `<details class="panel mt-sec" ${pending||revert.length||manual.length ? "open":""}>
+  return `<details class="panel mt-sec" ${state.rwOpen ? "open":""} ontoggle="state.rwOpen=this.open">
     <summary style="font-size:15px">🎁 مكافأة الملتزمين <span class="count-badge">${eligible.length}</span>${manual.length?` <span class="pill">🔔 ${manual.length} يدويًا</span>`:""}${revert.length?` <span class="pill late">${revert.length} انتهت مكافأتهم</span>`:""}</summary>
     <div class="undo-hint" style="margin-top:6px">يظهر هنا الزبون النشط الذي سدّد كل أشهره حتى ${rwMonthName(currentMonthKey)} ضمنًا (يُستثنى من اشترك هذا الشهر). عند الإرسال تختار: ⚡ مضاعفة السرعة (الافتراضي) أو 🌙 مفتوح ليلي. التطبيق يضع الوسم على حسابه في المايكروتك والراوتر يطبّقه خلال ${mtInterval()} دقيقة كحد أقصى، وتنتهي المكافأة تلقائيًا بنهاية الشهر. السعر لا يتغير: يبقى على السرعة المدفوعة.</div>
     ${sync}
@@ -2129,6 +2134,7 @@ function render(){
 let activityLogFetched = false;
 let usersFetched = false;
 function setView(v){
+  if(v!==state.view) state.rwOpen = false;   // the rewards panel always starts closed
   state.view=v;
   try{ localStorage.setItem('isp_last_view', v); }catch(e){}
   render();
@@ -2473,7 +2479,7 @@ function renderSuspendedPanel(){
       <tr><td>${escAttr(c.name)}</td><td>${escAttr(c.mikrotik||"—")}</td><td>${escAttr(c.phone||"—")}</td>
       <td>${c.debtAmount>0 ? `${fmtMoney(c.debtAmount)} <span class="pill warn">${c.unpaidCount} شهر</span>` : "لا دين"}</td>
       <td style="font-size:11.5px">${stopSinceText(c)}<div class="follow-cell" data-follow="${c.id}">${followUpHtmlRaw(c)}</div></td>
-      <td class="action-cell">${c.debtAmount>0 ? `<button class="btn secondary small" onclick='sendReminder(${JSON.stringify(c.id)})'>💬 تذكير</button>` : ""}<button class="btn secondary small" onclick='openStatementFor(${JSON.stringify(c.id)})'>كشف</button></td></tr>`).join("")}</tbody></table>`}
+      <td class="action-cell">${c.debtAmount>0 ? `<button class="btn secondary small" onclick='sendReminder(${JSON.stringify(c.id)})'>💬 تذكير</button>` : ""}<button class="btn secondary small" onclick='openStatementFor(${JSON.stringify(c.id)})'>كشف</button><button class="btn secondary small" onclick='setCustStatus(${JSON.stringify(c.id)},"active")'>▶ تفعيل</button></td></tr>`).join("")}</tbody></table>`}
   </div>`;
 }
 // this month at a glance: paid first, then promised, then owed; a click opens the subscriber's card
@@ -2540,7 +2546,8 @@ function followUpMini(c){
   return parts.join(" · ");
 }
 function gridRowActs(c, debt){
-  const sug = stopSuggestHtml(c, debt);
+  const react = c.active===false ? `<div class="row-acts no-print" style="margin-top:4px"><button title="يلغي الإيقاف ثم يسألك عن تشغيل النت" onclick='event.stopPropagation(); setCustStatus(${JSON.stringify(c.id)},"active")'>▶ أعِد التفعيل</button></div>` : "";
+  const sug = stopSuggestHtml(c, debt) + react;
   if(!(debt > 0)) return sug;
   const hasPhone = !!String(c.phone||"").replace(/\D/g,"");
   return `<div class="row-acts no-print">
@@ -2911,11 +2918,11 @@ function renderPayments(){
   <div class="no-print" style="display:flex;justify-content:flex-end;margin:-4px 0 10px">
     <button class="btn secondary" onclick="exportPaymentsPdf()">📄 تصدير PDF</button>
   </div>
-  <div class="no-print">${renderRewardPanel()}</div>
   <div class="panel">
     <div style="color:var(--muted);font-size:12px;margin-bottom:10px">💬 تذكير واتساب و🤝 وعد بالدفع تحت دين كل مشترك. للتذكير السريع: فلتر «عليهم ديون فقط» وترتيب «الأكثر ديناً». اضغط أي خلية لتسجيل مبلغ، أو "لم يدفع"، أو "غير مشترك" عن ذلك الشهر. الاسم وحساب المايكروتك ثابتان عند التمرير أفقيًا، ورأس الجدول ثابت عند التمرير لأسفل.</div>
     <div id="payments-grid-wrap">${renderPaymentsGridOnly()}</div>
   </div>
+  <div class="no-print">${renderRewardPanel()}</div>
   `;
 }
 
@@ -3099,6 +3106,7 @@ function openGridCellModal(customerId, month){
   // 2.0: "stopped for non-payment" is offered for the CURRENT month only (a past month cannot be "cut now")
   const stopOpt = month===currentMonthKey && currentStatus!=='paid';
   const preStop = stopOpt && c.active===false && c.stopReason==='debt';
+  const reactOpt = c.active===false && month===currentMonthKey;   // a stopped subscriber's "لم يدفع" this month = bring him back
   const receiver = (row && row.status==='paid') ? (row.receivedBy==='firas' ? 'firas' : 'mohammed') : '';   // a new payment has no default: choose cash or Sham Cash
   closeEditPaymentModal();
   const overlay = document.createElement('div');
@@ -3112,7 +3120,7 @@ function openGridCellModal(customerId, month){
           <label>الحالة</label>
           <select id="gcm-status" onchange="onGcmStatusChange(this.value)">
             <option value="paid" ${currentStatus==='paid'?'selected':''}>مدفوع</option>
-            <option value="unpaid" ${currentStatus==='unpaid'&&!preStop?'selected':''}>لم يدفع</option>
+            <option value="unpaid" ${currentStatus==='unpaid'&&!preStop?'selected':''}>${reactOpt ? "لم يدفع (إلغاء الإيقاف)" : "لم يدفع"}</option>
             <option value="not_subscribed" ${currentStatus==='not_subscribed'&&!preStop?'selected':''}>غير مشترك</option>
             ${stopOpt ? `<option value="stop_debt" ${preStop?'selected':''}>⛔ موقوف بسبب عدم الدفع</option>` : ""}
           </select>
@@ -3178,7 +3186,8 @@ function applyLocalPaymentUpdate(customerId, month, status, amount, recordedBy, 
 async function saveGridCell(customerId, month){
   const c = state.customers.find(x=>x.id===customerId);
   const status = document.getElementById('gcm-status').value;
-  if(status==='stop_debt'){ closeEditPaymentModal(); await setCustStatus(customerId, 'debt'); return; }   // 2.0: record it, then ask before cutting
+  if(status==='stop_debt'){ closeEditPaymentModal(); await setCustStatus(customerId, 'debt'); return; }
+  if(status==='unpaid' && c && c.active===false && month===currentMonthKey){ closeEditPaymentModal(); await setCustStatus(customerId, 'active'); return; }   // 2.2: cancel the stop, then ask about the net   // 2.0: record it, then ask before cutting
   const amount = status==='paid' ? (Number(document.getElementById('gcm-amount').value)||0) : 0;
   const rcvRaw = document.getElementById('gcm-receiver')?.value || "";
   if(status==='paid' && !rcvRaw){ alert("اختر كيف وصل المبلغ: 💵 نقدًا لمحمد، أو 📲 شام كاش لفراس."); return; }
