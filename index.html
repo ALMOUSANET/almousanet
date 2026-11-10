@@ -451,10 +451,10 @@ function holdEnd(btn){
 
 // ======================= VERSION =======================
 // Raise this number together with SERVER_VERSION in Code.gs on every update.
-const APP_VERSION = "1.8";
-const APP_VERSION_DATE = "2026-11-09";
+const APP_VERSION = "1.9";
+const APP_VERSION_DATE = "2026-11-10";
 // the lowest Code.gs version this page works with (raise it only when the page needs something new from the server)
-const MIN_SERVER_VERSION = "1.6";
+const MIN_SERVER_VERSION = "1.7";
 const CHANGELOG = [
   { v:"1.8", date:"2026-11-09", notes:"إشعارات مجموعة المالية على التلغرام: كل دفعة (و«دفع كل المتأخر» رسالة واحدة) وتعديلها وإلغاؤها، حركات الصندوقين، الجرد والتسوية، التراجع، وتنبيه إذا لم تصل هدية للراوتر خلال ساعة، وإحصائية أسبوعية (المسددون، غير المسددين، المحصّل، المكافأون، المتأخرون). الإعداد في صفحة المستخدمين. سكربت راوتر v3: يرسل إلى مجموعة البوت رسالة تفعيل الهدية بعد أن يتحقق أنها طُبّقت فعلًا، أو سبب الفشل، ويتابع الهدايا المؤجلة حتى تُطبَّق. عند تسجيل دفعة جديدة يجب اختيار «💵 نقدًا — محمد» أو «📲 شام كاش — فراس» (لا يوجد اختيار افتراضي)، وعلامة 📲 بجانب دفعات شام كاش. تعديل المستلم لدفعة قديمة يحافظ على تاريخها. زر في الأعلى (على أندرويد) لاختيار واتساب العادي أو بزنس لكل جهاز. (يحتاج الخادم 1.6)" },
   { v:"1.7.1", date:"2026-11-09", notes:"إعادة تحسين الواجهة الذي ضاع مع تحديثات 1.5–1.7: ألوان من أخضر الشعار (أخضر مدفوع، أصفر وعد، أحمر دين)، خط Readex Pro للعناوين والأرقام، شبكة مربعات دفعات الشهر في أعلى الرئيسية (مربع لكل مشترك يفتح بطاقته)، بطاقات الأرقام في شريط واحد، وقائمة الجوال سطر واحد يُمرَّر. (الصفحة فقط، الخادم يبقى 1.5)" },
@@ -720,6 +720,45 @@ async function setCustStatus(id, status){
   if(r.networkError){ alert("لا يوجد اتصال — أعد المحاولة."); return; }
   if(!r.ok){ alert(r.error || "تعذر الحفظ"); return; }
   await loadAllData();
+  await offerRouterPower(id);
+}
+// ---- 1.9: قطع النت / إعادة التفعيل على الراوتر (دائمًا بسؤال، لا شيء تلقائي) ----
+function canCut(){ return !!(state.user && (state.user.role==="admin" || (state.mt && state.mt.cutAll))) && !!(state.mt && state.mt.configured); }
+function powerCmdOf(c){ return mtCmds().find(x=>x.customerId===c.id && (x.action==="on"||x.action==="off") && (x.status==="pending"||x.status==="sent")) || null; }
+// what differs between the app and the router for this customer: "cut" (stopped but still online), "restore" (active but disabled), ""
+function powerNeed(c){
+  if(!c || !c.mikrotik || !c.mtState) return "";
+  if(c.active===false && c.mtState==="on") return "cut";
+  if(c.active!==false && c.mtState==="off") return "restore";
+  return "";
+}
+async function routerPower(id, on, quiet){
+  const c = state.customers.find(x=>x.id===id); if(!c) return;
+  if(!quiet && !confirm(on ? `إعادة تفعيل حساب «${c.name}» على الراوتر؟` : `قطع النت عن «${c.name}» على الراوتر؟\nيُنفَّذ خلال ${mtInterval()} دقيقة كحد أقصى.`)) return;
+  const r = await api("routerPower", {id, on});
+  if(r.networkError){ alert("لا يوجد اتصال — أعد المحاولة."); return; }
+  if(!r.ok){ alert(r.error || "تعذر إرسال الأمر"); return; }
+  showToast(r.cmd && r.cmd.already ? (on ? "الحساب فعّال على الراوتر أصلًا" : "الحساب معطّل على الراوتر أصلًا") : `أُرسل الأمر ✓ يُنفَّذ خلال ${mtInterval()} دقيقة`, 3500);
+  await loadAllData();
+}
+async function offerRouterPower(id){
+  const c = state.customers.find(x=>x.id===id), need = powerNeed(c);
+  if(!need || !canCut() || powerCmdOf(c)) return;
+  if(need==="cut"){ if(confirm(`سُجّل «${c.name}» ${custStatusText(c)}.\nحسابه ما زال يعمل على الراوتر. هل تقطع النت عنه أيضًا؟\n\nموافق = اقطع (خلال ${mtInterval()} دقيقة)\nإلغاء = سجّله فقط`)) await routerPower(id, false, true); }
+  else if(confirm(`«${c.name}» نشط في البرنامج لكن حسابه معطّل على الراوتر.\nهل تعيد تفعيله على الراوتر؟`)) await routerPower(id, true, true);
+}
+// after a payment: a subscriber whose account is disabled on the router gets a one-tap restore
+async function offerRestoreAfterPay(id){
+  const c = state.customers.find(x=>x.id===id);
+  if(!c || !c.mikrotik || c.mtState!=="off" || !canCut() || powerCmdOf(c)) return;
+  if(confirm(`سُجّلت الدفعة ✓\nحساب «${c.name}» معطّل على الراوتر. هل تعيد تفعيله؟\n(يرجع خلال ${mtInterval()} دقيقة ويصير «نشط» تلقائيًا)`)) await routerPower(id, true, true);
+}
+function powerHtml(c){
+  const x = powerCmdOf(c), need = powerNeed(c), id = JSON.stringify(c.id);
+  if(x) return `<div class="undo-meta">⏳ ${x.action==="off"?"أمر القطع":"أمر إعادة التفعيل"} بالطريق للراوتر (خلال ${mtInterval()} دقيقة)</div>`;
+  if(need==="cut") return `<div class="undo-meta" style="color:var(--danger,#e5484d)">⚠️ ما زال متصلًا — حسابه يعمل على الراوتر</div>${canCut()?`<div class="mt-acts" style="margin-top:4px"><button class="btn secondary small" onclick='routerPower(${id},false)'>✂ اقطع النت</button></div>`:""}`;
+  if(need==="restore") return `<div class="undo-meta" style="color:var(--danger,#e5484d)">⚠️ معطّل على الراوتر</div>${canCut()?`<div class="mt-acts" style="margin-top:4px"><button class="btn secondary small" onclick='routerPower(${id},true)'>▶ أعِد التفعيل على الراوتر</button></div>`:""}`;
+  return "";
 }
 function reasonButtons(c){
   const id = JSON.stringify(c.id);
@@ -786,7 +825,7 @@ function renderMtPanel(){
     ${sec("⚠ تعطّلوا بدون دين — ما السبب؟", checks.length, checks.map(c=>row(escAttr(c.name), `${escAttr(c.mikrotik||"—")} · ${stopSinceText(c)} · اعتُبر «متوقف» مؤقتًا`, reasonButtons(c))).join(""), true)}
     ${sec("الحالة مختلفة بين التطبيق والمايكروتك", R.mismatch.length, R.mismatch.map(x=>row(escAttr(x.c.name), `التطبيق: ${x.appTxt} · المايكروتك: ${x.mtTxt}`, `<button class="btn secondary small" onclick='setCustStatus(${id(x.c)},"${x.fix}")'>طبّق حالة المايكروتك</button>`)).join(""), true)}
     ${sec("السرعة مختلفة", R.speedDiff.length, R.speedDiff.map(x=>row(escAttr(x.c.name), `المايكروتك: ${escAttr(x.profile)} · التطبيق: ${x.c.speed} ميغا`, `<button class="btn secondary small" onclick='adoptMtSpeed(${id(x.c)},${x.sp})'>اعتمد ${x.sp} ميغا</button>`)).join(""), false)}
-    ${sec("أوامر الراوتر (المكافآت)", mtCmds().filter(x=>x.status!=="cancelled").slice(0,20).length, mtCmds().filter(x=>x.status!=="cancelled").slice(0,20).map(x=>row(escAttr(((state.customers.find(c=>c.id===x.customerId)||{}).name) || x.account), `${escAttr(x.account)}${x.arg && x.arg!=="-" ? " · حتى "+escAttr(x.arg) : ""} · ${formatLogTime(x.createdAt)}${x.by ? " · "+escAttr(x.by) : ""}<br/>${cmdStatusHtml(x, x.status==="failed"||x.status==="expired")}`, "")).join(""), failedCmds().length>0)}
+    ${sec("أوامر الراوتر (المكافآت والقطع)", mtCmds().filter(x=>x.status!=="cancelled").slice(0,20).length, mtCmds().filter(x=>x.status!=="cancelled").slice(0,20).map(x=>row(escAttr(((state.customers.find(c=>c.id===x.customerId)||{}).name) || x.account), `${escAttr(x.account)}${x.arg && x.arg!=="-" ? " · حتى "+escAttr(x.arg) : ""} · ${formatLogTime(x.createdAt)}${x.by ? " · "+escAttr(x.by) : ""}<br/>${cmdStatusHtml(x, x.status==="failed"||x.status==="expired")}`, "")).join(""), failedCmds().length>0)}
     ${sec("حسابات في المايكروتك غير موجودة في التطبيق", R.unknown.length, R.unknown.map(a=>row(escAttr(a[0]), `${a[1]===1?"معطّل":"فعّال"} · ${escAttr(a[2]||"")}`, "")).join(""), false)}
     ${sec("زبائن بلا حساب مطابق في المايكروتك", R.noAccount.length, R.noAccount.map(c=>row(escAttr(c.name), `حساب التطبيق: ${escAttr(c.mikrotik||"فارغ")} — صحّح الاسم ليطابق المايكروتك تمامًا`, `<button class="btn secondary small" onclick='openCustomerEditModal(${id(c)})'>تعديل</button>`)).join(""), false)}
     ${!checks.length && !R.mismatch.length && !R.speedDiff.length && !R.unknown.length && !R.noAccount.length ? `<div class="undo-hint" style="margin:8px 0 0">كل الحسابات متطابقة ✓</div>` : ""}
@@ -808,23 +847,18 @@ function mtScriptText(key){
   return String.raw`/system scheduler remove [find name=NC_SyncSecrets]
 /system script remove [find name=NC_SyncSecrets]
 /system script add name=NC_SyncSecrets policy=read,write,policy,test,sensitive dont-require-permissions=yes source={
-# NC_SyncSecrets v3 - Al-Mousa accounting app. Every 20 min: takes the reward commands, applies them, checks they really applied,
-# reports to the Telegram group (through the bot's own tgLog) and sends the PPPoE accounts back.
-# It only adds or removes the tags #2X=yyyy-MM-dd and #VIP in the account comment. X2_Apply and NIGHT_ON/NIGHT_OFF do the rest.
+# NC_SyncSecrets v4 - Al-Mousa accounting app. Every 20 min: takes the commands, applies them, checks they really applied,
+# and sends the results and the PPPoE accounts back. It does NOT talk to Telegram: the app tells the finance group.
+# Rewards: it only adds or removes the tags #2X=yyyy-MM-dd and #VIP in the account comment. X2_Apply and NIGHT_ON/NIGHT_OFF do the rest.
+# Cut / restore (only when asked from the app): "off" disables the account and drops its session, "on" enables it.
 :if ([:len [/system script job find where script="NC_SyncSecrets"]] > 1) do={ :error "NC_Sync busy" }
 :local url "${url}"
 :local key "${key}"
-:global tgLog
-:if ([:typeof $tgLog] = "nothing" && [:len [/system script find where name="TGBOT_Lib"]] > 0) do={ :do { /system script run TGBOT_Lib } on-error={} }
 :global ncRwWait
 :if ([:typeof $ncRwWait] != "array") do={ :set ncRwWait ({}) }
 :global ncRwSaid
 :if ([:typeof $ncRwSaid] != "array") do={ :set ncRwSaid ({}) }
-:local say do={
-  :global tgLog
-  :log info ("NC_Sync: " . $1)
-  :if ([:typeof $tgLog] != "nothing") do={ :do { $tgLog $1 a=1 } on-error={ :log warning "NC_Sync: telegram failed" } }
-}
+:local say do={ :log info ("NC_Sync: " . $1) }
 :local delTag do={
   :local s [:tostr $c]
   :local p [:find $s $t]
@@ -847,6 +881,7 @@ function mtScriptText(key){
 :local boost ([:len [/system script find where name="BOOST_DATA"]] > 0)
 :local hasX2 ([:len [/system script find where name="X2_Apply"]] > 0)
 :local res ({})
+:local det ({})
 :local ver ({})
 :local vk ({})
 :local vnm ({})
@@ -887,7 +922,7 @@ function mtScriptText(key){
         :set nm [:pick $line ($b4 + 1) [:len $line]]
       } else={ :set arg [:pick $line ($b3 + 1) [:len $line]] }
       :local code "ok"
-      :if (!($act = "2x" || $act = "2x-off" || $act = "vip" || $act = "vip-off")) do={ :set code "bad" }
+      :if (!($act = "2x" || $act = "2x-off" || $act = "vip" || $act = "vip-off" || $act = "on" || $act = "off")) do={ :set code "bad" }
       :if ($act = "2x" && !($arg~"^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]\$")) do={ :set code "bad" }
       :local sl [/ppp secret find where name=$acc]
       :if ($code = "ok" && [:len $sl] = 0) do={ :set code "missing" }
@@ -911,12 +946,22 @@ function mtScriptText(key){
             :set ($varg->$id) $arg
           }
         }
+        :if ($act = "off") do={
+          /ppp secret set $s disabled=yes
+          :do { /ppp active remove [find where name=$acc] } on-error={}
+          :if (![/ppp secret get $s disabled]) do={ :set code "noapply" }
+        }
+        :if ($act = "on") do={
+          /ppp secret set $s disabled=no
+          :if ([/ppp secret get $s disabled]) do={ :set code "noapply" }
+        }
         :if ($act = "2x-off") do={
           :if ([:typeof [:find $cm "#2X"]] = "num") do={ /ppp secret set $s comment=[$delTag c=$cm t="#2X"] }
           :if ($hasX2) do={
             :set ($ver->$id) $acc
             :set ($vk->$id) "off"
             :set ($vnm->$id) $nm
+            :set ($vold->$id) $pr
           } else={ :if ($pr~"-2X\$") do={ :set code "nox2" } }
         }
         :if ($act = "vip") do={
@@ -964,6 +1009,9 @@ function mtScriptText(key){
     :if ([:len $sl] = 0) do={ :set code "missing" } else={
       :local pr [/ppp secret get ($sl->0) profile]
       :local online ([:len [/ppp active find where name=$acc]] > 0)
+      :local on1 "0"
+      :if ($online) do={ :set on1 "1" }
+      :set ($det->$id) ([:tostr ($vold->$id)] . ">" . $pr . ">" . $on1)
       :local st ${R("غير متصل لحظة الفحص، تُطبَّق عند اتصاله")}
       :if ($online) do={ :set st ${R("متصل الآن بالسرعة الجديدة")} }
       :if (($vk->$id) = "on") do={
@@ -1007,6 +1055,7 @@ function mtScriptText(key){
     :if ($pr~"-2X\$") do={
       $say (${R("🎁 فُعّلت هدية ")} . $wn . " (" . $wa . ")" . ${R(": ⚡ مضاعفة السرعة بعد انتهاء الوضع الليلي\nالبروفايل الآن ")} . $pr . ${R(" حتى ")} . $wd)
       :set ($res->$wid) "ok"
+      :set ($det->$wid) (">" . $pr . ">")
     } else={
       :if ([:typeof [:find $cm "#2X"]] = "num") do={
         :if ($wr < 72) do={
@@ -1014,6 +1063,7 @@ function mtScriptText(key){
         } else={
           $say (${R("✗ لم تُفعَّل هدية ")} . $wn . " (" . $wa . ")" . ${R(" خلال 24 ساعة: البروفايل ما زال ")} . $pr)
           :set ($res->$wid) "noapply"
+          :set ($det->$wid) (">" . $pr . ">")
         }
       }
     }
@@ -1047,13 +1097,15 @@ function mtScriptText(key){
 :local rj ""
 :foreach id,cd in=$res do={
   :if ([:len $rj] > 0) do={ :set rj ($rj . ",") }
-  :set rj ($rj . "[\"" . $id . "\",\"" . $cd . "\"]")
+  :local dd [:tostr ($det->$id)]
+  :if (([:typeof [:find $dd "\""]] != "nil") || ([:typeof [:find $dd "\\"]] != "nil")) do={ :set dd "" }
+  :set rj ($rj . "[\"" . $id . "\",\"" . $cd . "\",\"" . $dd . "\"]")
 }
 :local bf 0
 :if ($boost) do={ :set bf 1 }
 :local nf 0
 :if ([:len [/system script find where name="VIP_DATA"]] > 0) do={ :set nf 1 }
-:set body ("{\"action\":\"mtSync\",\"payload\":{\"key\":\"" . $key . "\",\"v\":2,\"b\":" . $bf . ",\"n\":" . $nf . ",\"r\":[" . $rj . "],\"s\":[" . $body . "]}}")
+:set body ("{\"action\":\"mtSync\",\"payload\":{\"key\":\"" . $key . "\",\"v\":2,\"g\":1,\"b\":" . $bf . ",\"n\":" . $nf . ",\"r\":[" . $rj . "],\"s\":[" . $body . "]}}")
 # Google answers a POST with a redirect that RouterOS shows as an error (405). The data has already arrived, so that error is ignored.
 :do { /tool fetch url=$url http-method=post http-header-field="Content-Type: text/plain" http-data=$body output=none } on-error={}
 :log info ("NC_Sync: done, commands=" . $n)
@@ -1065,7 +1117,7 @@ async function loadMtSetup(regen){
   state.mtSetupLoading = true; render();
   const r = await api("getMtSetup", regen ? {regen:true} : {});
   state.mtSetupLoading = false;
-  if(r.ok){ state.mtSetup = r; state.mt = r.info; } else alert(r.error || "تعذر التحميل — تأكد أن الخادم 1.6");
+  if(r.ok){ state.mtSetup = r; state.mt = r.info; } else alert(r.error || "تعذر التحميل — تأكد أن الخادم 1.7");
   render();
 }
 async function regenMtKey(confirmed){ if(!confirmed && !confirm("مفتاح جديد؟ السكربت القديم على الراوتر سيتوقف حتى تلصق الجديد.")) return; await loadMtSetup(true); }
@@ -1073,6 +1125,24 @@ async function toggleMtSync(){
   const on = !(state.mt && state.mt.enabled===false);
   const r = await api("setMtSync", {enabled:!on});
   if(r.ok){ state.mt = r.info; showToast(!on ? "المزامنة تعمل ✓" : "المزامنة متوقفة"); render(); } else alert(r.error);
+}
+async function setCutAll(on){
+  const r = await api("setMtOpts", {cutAll:!!on});
+  if(r.ok){ state.mt = r.info; showToast(on ? "المحاسب يستطيع القطع والتفعيل ✓" : "القطع والتفعيل للمدير فقط ✓"); } else alert(r.error || "تعذر الحفظ — تأكد أن الخادم 1.7");
+  render();
+}
+async function regenPayKey(confirmed){
+  if(!confirmed && !confirm("مفتاح قراءة جديد؟ لوحة الشبكة ستتوقف عن قراءة حالة الدفع حتى تضع المفتاح الجديد في إعداداتها.")) return;
+  state.mtSetupLoading = true; render();
+  const r = await api("getMtSetup", {regenPay:true});
+  state.mtSetupLoading = false;
+  if(r.ok){ state.mtSetup = r; state.mt = r.info; } else alert(r.error);
+  render();
+}
+async function copyPayLink(){
+  const t = document.getElementById("pay-link"); if(!t) return;
+  try{ await navigator.clipboard.writeText(t.value); }catch(e){ t.select(); document.execCommand && document.execCommand("copy"); }
+  showToast("نُسخ الرابط ✓");
 }
 async function copyMtScript(){
   const t = document.getElementById("mt-script");
@@ -1084,25 +1154,30 @@ function renderMtSetupPanel(){
   const s = state.mtSetup, mt = state.mt || {};
   return `<div class="panel">
     <h3>ربط المايكروتك</h3>
-    <div class="undo-hint">الراوتر يسأل التطبيق كل 20 دقيقة: يرسل حسابات البرودباند، ويطبّق أوامر المكافآت فقط (يضيف أو يزيل الوسم #2X=تاريخ أو #VIP في تعليق الحساب، وسكربتاتك X2_Apply والوضع الليلي تكمل). لا يعطّل ولا يحذف ولا يغيّر كلمات السر. ويرسل إلى مجموعة بوت الراوتر رسالة تفعيل كل هدية بعد أن يتحقق أنها طُبّقت فعلًا، أو سبب عدم تفعيلها. عند تعطيل حساب يصبح الزبون «موقوف لعدم الدفع» إن كان عليه دين، وإلا «متوقف» مع سؤالك. عند تفعيله يعود نشطًا. الأشهر أثناء الإيقاف لا تُحتسب.</div>
+    <div class="undo-hint">الراوتر يسأل التطبيق كل 20 دقيقة: يرسل حسابات البرودباند، ويطبّق أوامر المكافآت (يضيف أو يزيل الوسم #2X=تاريخ أو #VIP في تعليق الحساب، وسكربتاتك X2_Apply والوضع الليلي تكمل)، وأوامر القطع وإعادة التفعيل التي تطلبها أنت من البرنامج. لا يقطع أحدًا من تلقاء نفسه، ولا يحذف ولا يغيّر كلمات السر. النتائج تصل لمجموعة المالية من البرنامج، والراوتر لا يرسل للتلغرام.</div>
+    <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin:0 0 10px"><input type="checkbox" ${mt.cutAll?"checked":""} onchange="setCutAll(this.checked)" style="width:auto"> السماح للمحاسب بقطع النت وإعادة التفعيل (بدونها: المدير فقط)</label>
     <div style="font-size:13px;margin-bottom:10px">${escAttr(mtLastText(mt))} · الحالة: ${mt.enabled===false ? '<span class="pill">متوقفة</span>' : '<span class="pill ok">تعمل</span>'}
       <button class="btn secondary small" onclick="toggleMtSync()">${mt.enabled===false ? "تشغيل المزامنة" : "إيقاف المزامنة"}</button></div>
     ${!s ? `<button class="btn secondary" onclick="loadMtSetup()">${state.mtSetupLoading ? "جارِ التحميل..." : "إظهار سكربت الراوتر"}</button>` : `
       <div class="undo-hint">انسخه والصقه كما هو في Terminal في Winbox (New Terminal). يحلّ محل السكربت القديم بنفس الاسم، ويعمل فورًا مرة ثم كل 20 دقيقة. بعدها راجع Log في Winbox: يجب أن ترى <code>NC_Sync: done</code>. لتحديث التطبيق فور أمر من البوت أضف في سكربت البوت: <code>/system script run NC_SyncSecrets</code></div>
       <textarea id="mt-script" readonly dir="ltr" style="width:100%;height:220px;font-family:monospace;font-size:11px">${escAttr(mtScriptText(s.key))}</textarea>
-      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"><button class="btn" onclick="copyMtScript()">📋 نسخ السكربت</button>${holdBtn("مفتاح جديد","regenMtKey",[],{small:true})}</div>`}
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"><button class="btn" onclick="copyMtScript()">📋 نسخ السكربت</button>${holdBtn("مفتاح جديد","regenMtKey",[],{small:true})}</div>
+      <h4 style="margin:16px 0 4px">🔗 ربط لوحة الشبكة (حالة الدفع)</h4>
+      <div class="undo-hint">رابط للقراءة فقط: تعرض به لوحة الشبكة «دفع / لم يدفع / موقوف» في كرت المشترك. لا يحمل أسماء ولا أرقام هواتف ولا مبالغ. انسخه والصقه في لوحة الشبكة ← الإعدادات ← «ربط برنامج المحاسبة».</div>
+      <input id="pay-link" readonly dir="ltr" style="width:100%;font-family:monospace;font-size:11px" value="${s.payKey ? escAttr(APPS_SCRIPT_URL + "?a=pay&k=" + s.payKey) : "حدّث الخادم إلى 1.7"}">
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"><button class="btn secondary" onclick="copyPayLink()">📋 نسخ الرابط</button>${holdBtn("مفتاح قراءة جديد","regenPayKey",[],{small:true})}</div>`}
   </div>`;
 }
 
 
 // ======================= TELEGRAM: مجموعة المالية (admin) =======================
-const TG_FLAG_NAMES = { pay:"💵 الدفعات (تسجيل، تعديل، إلغاء)", box:"📥 حركات الصندوقين (محمد وفراس)", count:"🧮 الجرد والتسوية", alert:"⚠ تنبيهات: هدية لم تصل للراوتر، توقف المزامنة", weekly:"📊 الإحصائية الأسبوعية" };
+const TG_FLAG_NAMES = { pay:"💵 الدفعات (تسجيل، تعديل، إلغاء)", box:"📥 حركات الصندوقين (محمد وفراس)", count:"🧮 الجرد والتسوية", alert:"⚠ تنبيهات: أمر لم يصل للراوتر، توقف المزامنة", gift:"🎁 تفعيل الهدايا وانتهاؤها (بعد تأكيد الراوتر)", cut:"✂ قطع النت وإعادة التفعيل", weekly:"📊 الإحصائية الأسبوعية" };
 const TG_DAY_NAMES = { SATURDAY:"السبت", SUNDAY:"الأحد", MONDAY:"الاثنين", TUESDAY:"الثلاثاء", WEDNESDAY:"الأربعاء", THURSDAY:"الخميس", FRIDAY:"الجمعة" };
 async function loadTgSetup(){
   state.tgLoading = true; render();
   const r = await api("getTgSetup");
   state.tgLoading = false;
-  if(r.ok) state.tg = r; else alert(r.error || "تعذر التحميل — تأكد أن الخادم 1.6");
+  if(r.ok) state.tg = r; else alert(r.error || "تعذر التحميل — تأكد أن الخادم 1.7");
   render();
 }
 function tgFormVals(){
@@ -1282,11 +1357,11 @@ function rwNoteText(c){
 }
 
 // ---- router commands (shown as ⏳ / ✓ / ✗) ----
-const CMD_NAMES = { "2x":"⚡ مضاعفة", "2x-off":"إرجاع السرعة", vip:"🌙 مفتوح ليلي", "vip-off":"إزالة المفتوح الليلي" };
+const CMD_NAMES = { "2x":"⚡ مضاعفة", "2x-off":"إرجاع السرعة", vip:"🌙 مفتوح ليلي", "vip-off":"إزالة المفتوح الليلي", off:"✂ قطع النت", on:"▶ إعادة التفعيل" };
 const CMD_RESULTS = {
   missing:"الحساب غير موجود على الراوتر", disabled:"الحساب معطّل على الراوتر", expired:"الحساب على بروفايل EXPIRED",
   noapply:"وُضع الوسم لكن البروفايل لم يتغير — تأكد أن السكربت X2_Apply يعمل وأن للبروفايل الأصلي rate-limit",
-  nox2:"السكربت X2_Apply غير موجود على الراوتر", bad:"أمر غير صالح", boost:"بانتظار انتهاء BOOST (مضاعفة الجميع)", undo:"أُلغي بالتراجع"
+  nox2:"السكربت X2_Apply غير موجود على الراوتر", bad:"أمر غير صالح أو سكربت الراوتر قديم (الصق الجديد)", boost:"بانتظار انتهاء BOOST (مضاعفة الجميع)", undo:"أُلغي بالتراجع"
 };
 function mtCmds(){ return (state.mt && Array.isArray(state.mt.cmds)) ? state.mt.cmds : []; }
 function rwCmdOf(c){ return mtCmds().find(x=>x.customerId===c.id && x.status!=="cancelled") || null; }
@@ -1858,7 +1933,7 @@ function speedBreakdownData(){
 }
 
 // ======================= ACTIONS =======================
-async function doToggleActive(id){ const r=await api("toggleActive",{id}); if(r.ok) await loadAllData(); else alert(r.error); }
+async function doToggleActive(id){ const r=await api("toggleActive",{id}); if(r.ok){ await loadAllData(); await offerRouterPower(id); } else alert(r.error); }
 async function doDeleteCustomer(id, confirmed){ if(!confirmed && !confirm("حذف نهائي — متأكد؟")) return; const r=await api("deleteCustomer",{id}); if(r.ok) await loadAllData(); else alert(r.error); }
 async function doSavePricing(pricing){ const r=await api("setPricing",{pricing}); if(r.ok) await loadAllData(); else alert(r.error); }
 
@@ -2676,7 +2751,7 @@ function renderCustomersTableOnly(){
           <div>${c.mikrotik||"—"}</div>
           <div style="color:var(--muted);font-size:11px;margin-top:4px;line-height:1.7">${metaLines.join("<br/>")}</div>
         </td>
-        <td>${custPill(c)}${!isActive ? `<div class="undo-meta">${stopSinceText(c)}</div><div class="mt-acts" style="margin-top:4px">${c.stopReason==='debt' ? `<button class="btn secondary small" onclick='setCustStatus(${JSON.stringify(c.id)},"left")'>🚪 متوقف</button>` : `<button class="btn secondary small" onclick='setCustStatus(${JSON.stringify(c.id)},"debt")'>⛔ لعدم الدفع</button>`}</div>` : ""}${rwOf(c).s.length ? `<div class="undo-meta">🎁 مكافأة: ${rwOf(c).s.slice(-3).map(m=>rwMonthName(m)+(rwKind(c,m)==="night"?" 🌙":" ⚡")).join("، ")}${rwStillDoubled(c) ? " — ما زالت مفعّلة" : ""}</div>` : ""}${c.mtProfile ? `<div class="undo-meta">المايكروتك: ${c.mtState==='off'?'معطّل':'فعّال'} · ${escAttr(c.mtProfile)}</div>` : ""}${effectiveSpeedHtml(c)}</td>
+        <td>${custPill(c)}${!isActive ? `<div class="undo-meta">${stopSinceText(c)}</div><div class="mt-acts" style="margin-top:4px">${c.stopReason==='debt' ? `<button class="btn secondary small" onclick='setCustStatus(${JSON.stringify(c.id)},"left")'>🚪 متوقف</button>` : `<button class="btn secondary small" onclick='setCustStatus(${JSON.stringify(c.id)},"debt")'>⛔ لعدم الدفع</button>`}</div>` : ""}${rwOf(c).s.length ? `<div class="undo-meta">🎁 مكافأة: ${rwOf(c).s.slice(-3).map(m=>rwMonthName(m)+(rwKind(c,m)==="night"?" 🌙":" ⚡")).join("، ")}${rwStillDoubled(c) ? " — ما زالت مفعّلة" : ""}</div>` : ""}${c.mtProfile ? `<div class="undo-meta">المايكروتك: ${c.mtState==='off'?'معطّل':'فعّال'} · ${escAttr(c.mtProfile)}</div>` : ""}${powerHtml(c)}${effectiveSpeedHtml(c)}</td>
         <td class="action-cell">
           <button class="btn secondary small" onclick='openCustomerEditModal(${JSON.stringify(c.id)})'>تعديل</button>
           <button class="btn secondary small" onclick='doToggleActive(${JSON.stringify(c.id)})'>${isActive?"تعطيل":"تفعيل"}</button>
@@ -3081,7 +3156,7 @@ async function saveGridCell(customerId, month){
     return;
   }
 
-  if(status==='paid') openReceiptModal(customerId, [{ month, amount }], receivedBy, state.user.name);
+  if(status==='paid'){ openReceiptModal(customerId, [{ month, amount }], receivedBy, state.user.name); offerRestoreAfterPay(customerId); }
 }
 
 // ======================= PAYMENT RECEIPT (إيصال دفع — image for WhatsApp) =======================
@@ -3450,7 +3525,7 @@ async function confirmPayAll(customerId, keys, _held){
   hideToast();
   showToast(`سُجّل ${saved} شهر ✓`);
   await loadAllData();
-  if(savedPicks.length) openReceiptModal(customerId, savedPicks, receivedBy, state.user.name);
+  if(savedPicks.length){ openReceiptModal(customerId, savedPicks, receivedBy, state.user.name); offerRestoreAfterPay(customerId); }
   if(undoable){ const cu = state.customers.find(c=>c.id===customerId); showUndoBar({group:undoGroup}, `دفع ${undoable} ${undoable===1?"شهر":"أشهر"} — ${cu?cu.name:""}`); }
 }
 function sendStatementWA(){
